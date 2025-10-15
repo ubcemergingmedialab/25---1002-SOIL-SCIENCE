@@ -1,12 +1,14 @@
-// src/App.tsx
-
 import "./index.css";
 import UBCMap from "./UBCMap";
 
+// bonsai URL as fallback for now
+const bonsaiUrl = "/assets/gaussian_splat_data/bonsai/bonsai.ksplat";
+
 export default function App() {
-  const openViewer = () => {
-    const url = new URL("/viewer", window.location.href).href;
-    window.open(url, "_blank", "noopener,noreferrer");
+  const openViewer = (path?: string) => {
+    const url = new URL("/viewer", window.location.href);
+    if (path) url.searchParams.set("gaussianPath", path);
+    window.open(url.href, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -15,7 +17,7 @@ export default function App() {
         <div style={{ textAlign: "center" }}>
           <h1 style={{ marginBottom: "1rem" }}>Virtual Soils</h1>
           <button
-            onClick={openViewer}
+            onClick={() => openViewer(bonsaiUrl)}
             style={{
               padding: "0.8rem 1.2rem",
               borderRadius: 12,
@@ -30,9 +32,8 @@ export default function App() {
         </div>
       </section>
 
-      {/* The simple interactive map at UBC */}
       <section style={{ padding: "0 1rem 2rem" }}>
-        <UBCMap />
+        <UBCMap openViewer={openViewer} defaultGaussianPath={bonsaiUrl} />
       </section>
     </div>
   );
