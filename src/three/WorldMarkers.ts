@@ -66,14 +66,17 @@ export class WorldMarkers {
     }
   }
 
-  setEnvironmentMap(envMap: THREE.Texture | null) {
-    this.envMap = envMap;
-    this.scene.environment = envMap ?? null;
+  setEnvironmentMap(envMap: THREE.Texture | null | undefined) {
+    this.envMap = envMap ?? null;
+    this.scene.environment = this.envMap;
     for (const mesh of this.markers) {
       const mat = mesh.material;
       if ("envMap" in mat) {
-        (mat as THREE.MeshStandardMaterial).envMap = envMap ?? undefined;
-        mat.needsUpdate = true;
+        const m = mat as unknown as { envMap: THREE.Texture | null };
+        m.envMap = this.envMap;
+        if ("needsUpdate" in mat) {
+          (mat as THREE.Material).needsUpdate = true;
+        }
       }
     }
   }

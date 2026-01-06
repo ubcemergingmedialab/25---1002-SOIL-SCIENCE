@@ -140,9 +140,6 @@ export class ThreeApp {
     this.resizeToContainer();
     this.observeResize();
 
-    // test
-    // this.setGaussianPath(DEFAULT_SPLAT_PATH);
-
     // animate
     this.renderer.setAnimationLoop(this.tick);
   }
