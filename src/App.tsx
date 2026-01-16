@@ -2,10 +2,13 @@ import "./index.css";
 import UBCMap from "./UBCMap";
 
 export default function App() {
-  const openViewer = (path?: string) => {
+  const openViewer = (path?: string, markers?: Array<Record<string, unknown>>) => {
     if (!path) return;
     const url = new URL("/viewer", window.location.href);
     url.searchParams.set("gaussianPath", path);
+    if (markers && markers.length > 0) {
+      url.searchParams.set("markers", JSON.stringify(markers));
+    }
     window.open(url.href, "_blank", "noopener,noreferrer");
   };
 

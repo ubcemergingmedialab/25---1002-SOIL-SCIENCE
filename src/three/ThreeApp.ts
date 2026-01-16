@@ -120,16 +120,6 @@ export class ThreeApp {
 
     // World markers
     this.markers = new WorldMarkers();
-    const markerTexture = new THREE.TextureLoader().load("assets/icons/markerIcon1.png");
-    this.markers.setMarkers([ //temp test marker
-      {
-        position: new THREE.Vector3(-0.20, -0.74, -0.15),
-        color: "#FFFFFF",
-        radius: 0.1,
-        texture: markerTexture,
-        label: "Sample marker. There should be some info about this marker displayed here.",
-      },
-    ]);
     this.renderer.domElement.addEventListener("click", this.handleClick);
 
     // World axes setup
@@ -198,8 +188,8 @@ export class ThreeApp {
     if (this.destroyed) return;
     this.overlay.show();
     try {
-      await this.gaussian.setPath(DEFAULT_SPLAT_PATH); //temp
-      //await this.gaussian.setPath(path);
+      //await this.gaussian.setPath(DEFAULT_SPLAT_PATH); //temp
+      await this.gaussian.setPath(path);
       if (!this.destroyed) {
         this.camera.position.set(0, 2.5, 5);
       }

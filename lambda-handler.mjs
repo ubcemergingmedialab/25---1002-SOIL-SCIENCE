@@ -20,14 +20,28 @@ async function getPins() {
     .filter(i => ["TestA", "TestB", "TestC"].includes(String(i.FieldID)))
     .map(i => ({
       title: i.Name,
-      position: { lat: Number(i.Latitude), lng: Number(i.Longitude) },
+      position: {
+        lat: Number(i.Latitude),
+        lng: Number(i.Longitude)
+      },
       path: i.File,
       description: i.Description,
       thumbnail: i.Thumbnail,
-      thumbnailAlt: i.ThumbnailAlt
+      thumbnailAlt: i.ThumbnailAlt,
+    
+      markers: (i.markers ?? []).map(m => ({
+        icon: m[0],
+        scale: m[1],
+        position: {
+          x: m[2][0],
+          y: m[2][1],
+          z: m[2][2]
+        },
+        text: m[3]
+      }))
     }));
-}
-
+  }
+ 
 async function getFields() {
   const data = await ddb.send(new ScanCommand({ TableName: TABLE }));
   return data.Items || [];
