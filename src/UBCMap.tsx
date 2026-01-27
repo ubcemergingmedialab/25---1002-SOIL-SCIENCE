@@ -24,7 +24,10 @@ export default function UBCMap({
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
+  const pinToMarkerRef = useRef<Map<number, google.maps.Marker>>(new Map());
   const [pins, setPins] = useState<Pin[]>([]);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [selectedPinIndex, setSelectedPinIndex] = useState<number | null>(null);
 
   //
   // -------------------------------------------------------------------
@@ -94,6 +97,8 @@ export default function UBCMap({
   // -------------------------------------------------------------------
   //
   useEffect(() => {
+    if (!mapLoaded) return;
+
     let cancelled = false;
 
     (async () => {
@@ -113,66 +118,46 @@ export default function UBCMap({
       // Cleanup previous markers
       markersRef.current.forEach((m) => m.setMap(null));
       markersRef.current = [];
+      pinToMarkerRef.current.clear();
 
-      pins.forEach((pin) => {
+      pins.forEach((pin, index) => {
         const marker = new google.maps.Marker({
           position: pin.position,
           map: mapRef.current!,
           title: pin.title,
         });
 
+        pinToMarkerRef.current.set(index, marker);
+
         const handleClick = () => {
+          setSelectedPinIndex(index);
           if (infoWindowRef.current) {
             infoWindowRef.current.close();
             infoWindowRef.current = null;
           }
 
           const content = document.createElement("div");
-          content.style.fontFamily = "Arial, Helvetica, sans-serif";
-          content.style.minWidth = "360px";
-          content.style.maxWidth = "520px";
-          content.style.color = "#111827";
+          content.className = "info-window-content";
+          content.style.fontFamily = "system-ui, -apple-system, sans-serif";
+          content.style.minWidth = "380px";
+          content.style.maxWidth = "480px";
           content.style.overflow = "hidden";
+          content.style.background = "#1a1f2e";
+          content.style.borderRadius = "8px";
+          content.style.border = "1px solid rgba(255, 255, 255, 0.1)";
+          content.style.boxShadow = "0 12px 40px rgba(0, 0, 0, 0.5)";
 
           const card = document.createElement("div");
-          card.style.display = "grid";
-          card.style.gridTemplateColumns = "180px 1fr";
-          card.style.gap = "20px";
-          card.style.padding = "16px 20px 18px";
-          card.style.alignItems = "start";
+          card.style.display = "flex";
+          card.style.flexDirection = "column";
+          card.style.gap = "0";
 
-          const mediaColumn = document.createElement("div");
-          mediaColumn.style.display = "flex";
-          mediaColumn.style.flexDirection = "column";
-          mediaColumn.style.alignItems = "center";
-          mediaColumn.style.gap = "12px";
-
-          const body = document.createElement("div");
-          body.style.display = "flex";
-          body.style.flexDirection = "column";
-          body.style.gap = "8px";
-
-          const title = document.createElement("h3");
-          title.textContent = pin.title || "Untitled field";
-          title.style.margin = "0";
-          title.style.fontSize = "1.2rem";
-          title.style.color = "#0f172a";
-          title.style.lineHeight = "1.35";
-
-          const coords = document.createElement("div");
-          coords.style.fontSize = "0.92rem";
-          coords.style.color = "#475569";
-          coords.innerHTML = `
-            <div><strong>Lat:</strong> ${pin.position.lat.toFixed(6)}</div>
-            <div><strong>Lng:</strong> ${pin.position.lng.toFixed(6)}</div>
-          `;
-
+          // Image section at top
           const imgWrap = document.createElement("div");
           imgWrap.style.width = "100%";
-          imgWrap.style.borderRadius = "12px";
+          imgWrap.style.height = "180px";
           imgWrap.style.overflow = "hidden";
-          imgWrap.style.boxShadow = "0 4px 16px rgba(15,23,42,0.18)";
-          imgWrap.style.maxHeight = "180px";
+          imgWrap.style.position = "relative";
 
           const img = document.createElement("img");
           img.src = pin.thumbnail || placeholderImage;
@@ -181,59 +166,93 @@ export default function UBCMap({
           img.style.width = "100%";
           img.style.height = "100%";
           img.style.objectFit = "cover";
-          img.style.aspectRatio = "4 / 3";
           img.loading = "lazy";
 
           imgWrap.appendChild(img);
 
-          const button = document.createElement("button");
-          button.id = "open-gaussian-btn";
-          button.textContent = "Open 3D Viewer";
-          button.style.width = "100%";
-          button.style.padding = "0.55rem 1rem";
-          button.style.borderRadius = "999px";
-          button.style.border = "none";
-          button.style.cursor = "pointer";
-          button.style.background =
-            "linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)";
-          button.style.color = "#fff";
-          button.style.fontSize = "0.9rem";
-          button.style.boxShadow = "0 8px 18px rgba(59,130,246,0.25)";
-          button.style.fontWeight = "600";
-          if (!pin.path) {
-            button.style.opacity = "0.6";
-            button.style.cursor = "not-allowed";
-            button.disabled = true;
-          }
+          // Content body
+          const body = document.createElement("div");
+          body.style.padding = "1.25rem 1.5rem 1.5rem";
+          body.style.display = "flex";
+          body.style.flexDirection = "column";
+          body.style.gap = "0.75rem";
 
-          mediaColumn.appendChild(imgWrap);
-          mediaColumn.appendChild(button);
+          const title = document.createElement("h3");
+          title.textContent = pin.title || "Untitled field";
+          title.style.margin = "0";
+          title.style.fontSize = "1.25rem";
+          title.style.color = "#e6edf3";
+          title.style.lineHeight = "1.3";
+          title.style.fontWeight = "600";
+
+          const coords = document.createElement("div");
+          coords.style.fontSize = "0.85rem";
+          coords.style.color = "#9aa4b5";
+          coords.style.display = "flex";
+          coords.style.gap = "1rem";
+          coords.innerHTML = `
+            <span><strong style="color:#b8c2d1">Lat:</strong> ${pin.position.lat.toFixed(5)}</span>
+            <span><strong style="color:#b8c2d1">Lng:</strong> ${pin.position.lng.toFixed(5)}</span>
+          `;
 
           const desc = document.createElement("p");
+          desc.className = "info-window-desc";
           desc.textContent = pin.description?.trim()
             ? pin.description.trim()
             : "No description available yet.";
           desc.style.margin = "0";
-          desc.style.fontSize = "0.95rem";
-          desc.style.color = "#1f2937";
-          desc.style.lineHeight = "1.55";
+          desc.style.fontSize = "0.9rem";
+          desc.style.color = "#b8c2d1";
+          desc.style.lineHeight = "1.6";
           desc.style.whiteSpace = "pre-wrap";
-          desc.style.maxHeight = "12.5rem";
+          desc.style.maxHeight = "6rem";
           desc.style.overflowY = "auto";
-          desc.style.paddingRight = "6px";
-          desc.style.marginRight = "-6px";
+
+          const button = document.createElement("button");
+          button.id = "open-gaussian-btn";
+          button.textContent = "Open 3D Viewer";
+          button.style.marginTop = "0.5rem";
+          button.style.width = "100%";
+          button.style.padding = "0.75rem 1.25rem";
+          button.style.borderRadius = "6px";
+          button.style.border = "none";
+          button.style.cursor = "pointer";
+          button.style.background = "linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)";
+          button.style.color = "#fff";
+          button.style.fontSize = "0.95rem";
+          button.style.fontWeight = "600";
+          button.style.transition = "transform 0.15s, box-shadow 0.15s";
+          button.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.3)";
+          if (!pin.path) {
+            button.style.opacity = "0.5";
+            button.style.cursor = "not-allowed";
+            button.style.background = "#3a4255";
+            button.style.boxShadow = "none";
+            button.disabled = true;
+          }
+          button.onmouseenter = () => {
+            if (pin.path) {
+              button.style.transform = "translateY(-1px)";
+              button.style.boxShadow = "0 6px 20px rgba(59, 130, 246, 0.4)";
+            }
+          };
+          button.onmouseleave = () => {
+            button.style.transform = "translateY(0)";
+            button.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.3)";
+          };
 
           body.appendChild(title);
           body.appendChild(coords);
           body.appendChild(desc);
+          body.appendChild(button);
 
-          card.appendChild(mediaColumn);
+          card.appendChild(imgWrap);
           card.appendChild(body);
           content.appendChild(card);
 
           const infoWindow = new google.maps.InfoWindow({
             content,
-            maxWidth: 520,
+            maxWidth: 480,
           });
 
           infoWindow.open({
@@ -264,12 +283,167 @@ export default function UBCMap({
       }
       mapRef.current = null;
     };
-  }, [pins]);
+  }, [pins, mapLoaded]);
+
+  const handlePinMenuClick = (index: number) => {
+    setSelectedPinIndex(index);
+    
+    // If map isn't loaded, load it first
+    if (!mapLoaded) {
+      setMapLoaded(true);
+      // Wait for map and markers to be ready
+      const checkAndClick = () => {
+        const marker = pinToMarkerRef.current.get(index);
+        if (marker && mapRef.current) {
+          const position = marker.getPosition()!;
+          // First pan to the marker
+          mapRef.current.panTo(position);
+          // Wait for pan to complete, then zoom and trigger click
+          const idleListener = google.maps.event.addListenerOnce(
+            mapRef.current,
+            "idle",
+            () => {
+              mapRef.current!.setZoom(15);
+              // Wait for zoom to complete, then trigger click
+              google.maps.event.addListenerOnce(mapRef.current!, "idle", () => {
+                google.maps.event.trigger(marker, "click");
+              });
+            }
+          );
+        } else {
+          // Retry after a short delay if markers aren't ready yet
+          setTimeout(checkAndClick, 100);
+        }
+      };
+      setTimeout(checkAndClick, 500);
+      return;
+    }
+
+    const marker = pinToMarkerRef.current.get(index);
+    if (marker && mapRef.current) {
+      const position = marker.getPosition()!;
+      // First pan to the marker
+      mapRef.current.panTo(position);
+      // Wait for pan to complete, then zoom and trigger click
+      google.maps.event.addListenerOnce(mapRef.current, "idle", () => {
+        mapRef.current!.setZoom(15);
+        // Wait for zoom to complete, then trigger click
+        google.maps.event.addListenerOnce(mapRef.current!, "idle", () => {
+          google.maps.event.trigger(marker, "click");
+        });
+      });
+    }
+  };
 
   return (
-    <div
-      ref={containerRef}
-      style={{ width: "min(1100px, 100%)", height: "60vh", borderRadius: 12, margin: "0 auto" }}
-    />
+    <div style={{ width: "min(1100px, 100%)", margin: "0 auto", display: "flex", gap: "1rem", alignItems: "flex-start" }}>
+      {/* Side Menu */}
+      <aside
+        style={{
+          width: "240px",
+          flexShrink: 0,
+          backgroundColor: "#1a1f2e",
+          borderRadius: 6,
+          padding: "1rem",
+          maxHeight: "60vh",
+          overflowY: "auto",
+          border: "1px solid rgba(255, 255, 255, 0.1)",
+        }}
+      >
+        <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.1rem", color: "#e6edf3", fontWeight: 600 }}>
+          Locations
+        </h3>
+        {pins.length === 0 ? (
+          <div style={{ color: "#9aa4b5", fontSize: "0.9rem", padding: "1rem 0" }}>
+            Loading locations...
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+            {pins.map((pin, index) => (
+              <button
+                key={index}
+                className="location-btn"
+                onClick={() => handlePinMenuClick(index)}
+                style={{
+                  padding: "0.5rem 0.75rem",
+                  borderRadius: "4px",
+                  border: "none",
+                  backgroundColor: selectedPinIndex === index ? "rgba(255, 255, 255, 0.1)" : "rgba(255, 255, 255, 0.04)",
+                  color: selectedPinIndex === index ? "#fff" : "#b8c2d1",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  fontSize: "0.875rem",
+                  fontWeight: selectedPinIndex === index ? 500 : 400,
+                  transition: "background-color 0.15s, color 0.15s",
+                  outline: "none",
+                  boxShadow: "none",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
+                  e.currentTarget.style.color = "#fff";
+                }}
+                onMouseLeave={(e) => {
+                  if (selectedPinIndex !== index) {
+                    e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.04)";
+                    e.currentTarget.style.color = "#b8c2d1";
+                  } else {
+                    e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.1)";
+                  }
+                }}
+              >
+                {pin.title || `Location ${index + 1}`}
+              </button>
+            ))}
+          </div>
+        )}
+      </aside>
+
+      {/* Map Container */}
+      <div
+        style={{
+          flex: 1,
+          height: "60vh",
+          borderRadius: 6,
+          position: "relative",
+          minWidth: 0,
+        }}
+      >
+        <div
+          ref={containerRef}
+          style={{ width: "100%", height: "100%", borderRadius: 6 }}
+        />
+        {!mapLoaded && (
+          <div
+            onClick={() => setMapLoaded(true)}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              backgroundColor: "#4a5568",
+              borderRadius: 6,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              userSelect: "none",
+              color: "#e2e8f0",
+              fontSize: "1.25rem",
+              fontWeight: 500,
+              transition: "background-color 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "#5a6578";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "#4a5568";
+            }}
+          >
+            Click to load map
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

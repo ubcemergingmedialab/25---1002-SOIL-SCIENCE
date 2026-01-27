@@ -38,6 +38,93 @@ body { margin: 0; background: #0e1116; color: #e6edf3; font-family: system-ui, s
 .threeWrap { position: relative; height: 100vh; height: 100dvh; }
 canvas { display: block; width: 100%; height: 100%; }
 
+/* Google Maps InfoWindow dark theme overrides */
+.gm-style .gm-style-iw-c {
+  background: #1a1f2e !important;
+  border-radius: 8px !important;
+  padding: 0 !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.gm-style .gm-style-iw-d {
+  overflow: hidden !important;
+  padding: 0 !important;
+}
+
+.gm-style .gm-style-iw-tc::after {
+  background: #1a1f2e !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Close button styling */
+.gm-style .gm-style-iw-chr {
+  position: absolute !important;
+  top: 8px !important;
+  right: 8px !important;
+  z-index: 10 !important;
+}
+
+.gm-style .gm-style-iw-chr button {
+  background: rgba(0, 0, 0, 0.5) !important;
+  border-radius: 50% !important;
+  width: 32px !important;
+  height: 32px !important;
+  opacity: 1 !important;
+  backdrop-filter: blur(4px) !important;
+  transition: background 0.2s !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.gm-style .gm-style-iw-chr button:hover {
+  background: rgba(0, 0, 0, 0.7) !important;
+}
+
+.gm-style .gm-style-iw-chr button span {
+  margin: 0 !important;
+  width: 18px !important;
+  height: 18px !important;
+  filter: invert(1) !important;
+}
+
+/* Dark scrollbar for InfoWindow description */
+.info-window-desc::-webkit-scrollbar {
+  width: 6px;
+}
+
+.info-window-desc::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.info-window-desc::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.info-window-desc::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Firefox scrollbar */
+.info-window-desc {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+}
+
+/* Location menu buttons - override global button styles */
+.location-btn {
+  border: none !important;
+}
+.location-btn:hover,
+.location-btn:focus {
+  border-color: transparent !important;
+  outline: none !important;
+}
+
 .mapInfo {
   padding: 3rem 1rem 4rem;
 }
@@ -74,7 +161,7 @@ canvas { display: block; width: 100%; height: 100%; }
   padding: 0.6rem 0.75rem;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  border-radius: 6px;
   font-size: 0.9rem;
   color: #cbd5e1;
 }

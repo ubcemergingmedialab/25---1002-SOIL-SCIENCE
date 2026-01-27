@@ -67,7 +67,7 @@ export default function App() {
               <img
                 src="/assets/images/Canada-Soil-Map.jpg"
                 alt="Soil Order Map of Canada"
-                style={{ width: "100%", borderRadius: 12 }}
+                style={{ width: "100%", borderRadius: 6 }}
               />
               <figcaption style={{ opacity: 0.8, marginTop: ".5rem" }}>
                 Soil Order Map of Canada from{" "}
@@ -108,7 +108,7 @@ export default function App() {
               <img
                 src="/assets/images/Soil-Monolith.jpg"
                 alt="Soil monolith photograph"
-                style={{ width: "100%", borderRadius: 12 }}
+                style={{ width: "100%", borderRadius: 6 }}
               />
               <figcaption style={{ opacity: 0.8, marginTop: ".5rem" }}>
                 A photograph of Monolith 8-04 from the UBC Soil Monolith Collection.
@@ -140,7 +140,7 @@ export default function App() {
               <img
                 src="/assets/images/Radiance-Fields-Demo.jpg"
                 alt="Radiance fields demo in VRChat"
-                style={{ width: "100%", borderRadius: 12 }}
+                style={{ width: "100%", borderRadius: 6 }}
               />
               <figcaption style={{ opacity: 0.8, marginTop: ".5rem" }}>
                 An example of how PC-VR based radiance fields have been used for soil science
@@ -176,7 +176,7 @@ export default function App() {
             </p>
 
             <h3>The Concept for PC-VR based Virtual Soils:</h3>
-            <div style={{ width: "100%", aspectRatio: "16/9", borderRadius: 12, overflow: "hidden" }}>
+            <div style={{ width: "100%", aspectRatio: "16/9", borderRadius: 6, overflow: "hidden" }}>
               <iframe
                 width="100%"
                 height="100%"
@@ -198,7 +198,7 @@ export default function App() {
               <img
                 src="/assets/images/Gaussian-Splat.jpg"
                 alt="3D Gaussian splats example"
-                style={{ width: "100%", borderRadius: 12 }}
+                style={{ width: "100%", borderRadius: 6 }}
               />
               <figcaption style={{ opacity: 0.8, marginTop: ".5rem" }}>
                 A screenshot from the radiance field of the Ed Lyon Forest Garden on Sts&apos;ailes
@@ -287,7 +287,7 @@ export default function App() {
               <img
                 src="assets/images/Capture-Aids.jpg"
                 alt="Capture aids with AprilTags"
-                style={{ width: "100%", borderRadius: 12 }}
+                style={{ width: "100%", borderRadius: 6 }}
               />
               <figcaption style={{ opacity: 0.8, marginTop: ".5rem" }}>
                 A screenshot of the tracking soil tape, and scale flags used in the capture of the
