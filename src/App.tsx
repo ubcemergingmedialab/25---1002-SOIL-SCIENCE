@@ -79,7 +79,7 @@ export default function App() {
 
             <p>
               Soils are all around us. Whether we&apos;re in the city, or in the countryside there is
-              soil somewhere near to us— in planters or parks, fields or forests. When teaching, or
+              soil somewhere near to us. In planters or parks, fields or forests. When teaching, or
               learning about soil finding it isn&apos;t the problem, the problem is accessing the{" "}
               <i>diversity</i>. As soil formation is impacted by the five soil formation factors{" "}
               <b>Cl</b>imate, <b>O</b>rganisms, <b>R</b>elief, <b>P</b>arent Material, and{" "}
@@ -272,22 +272,10 @@ export default function App() {
             <p>
               Currently, 3D Gaussian splat based radiance fields are rendered within a WebGL 3D
               Viewer created by{" "}
-              <a href="https://twitter.com/antimatter15" target="_blank" rel="noreferrer">
-                Kevin Kwok
-              </a>{" "}
-              with edits by{" "}
-              <a
-                href="https://github.com/ErfolgreichCharismatisch"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Erfolgreich Charismatisch
-              </a>{" "}
-              and{" "}
-              <a href="https://amywells.ca" target="_blank" rel="noreferrer">
-                Amy Wells
-              </a>{" "}
-              to improve the controls.
+              <a href="https://github.com/mkkellogg" target="_blank" rel="noreferrer">
+                Mark Kellog
+              </a>
+              .
             </p>
 
             {/* NEXT STEPS */}
