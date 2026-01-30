@@ -18,6 +18,12 @@ type MarkerPayload = {
   text?: string;
 };
 
+export type ViewerProps = {
+  gaussianPath?: string;
+  markers?: Array<Record<string, unknown>>;
+  onBack?: () => void;
+};
+
 const resolveAssetUrl = (raw: string) => {
   if (/^(https?:|blob:|data:)/i.test(raw)) return raw;
   if (raw.startsWith("/")) return new URL(raw, window.location.origin).href;
@@ -35,7 +41,7 @@ const parseMarkers = (raw: string | null): MarkerPayload[] => {
   }
 };
 
-export default function Viewer() {
+export default function Viewer({ gaussianPath, markers, onBack }: ViewerProps = {}) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const location = useLocation();
 
@@ -43,10 +49,10 @@ export default function Viewer() {
     if (!wrapRef.current) return;
     const app = new ThreeApp(wrapRef.current);
 
-    // read gaussianPath from query and load
+    // Use props if provided, otherwise fall back to query params
     const params = new URLSearchParams(location.search);
-    const raw = params.get("gaussianPath");
-    const markerParam = params.get("markers");
+    const raw = gaussianPath || params.get("gaussianPath");
+    const markerParam = markers ? JSON.stringify(markers) : params.get("markers");
 
     if (raw && hasSetGaussianPath(app)) {
       // resolve: support /assets from public, absolute urls, and relative fallbacks
@@ -107,5 +113,58 @@ export default function Viewer() {
     return () => app.dispose();
   }, [location.search]);
 
-  return <div className="threeWrap" ref={wrapRef} />;
+  return (
+    <div className="threeWrap" ref={wrapRef}>
+      {onBack && (
+        <button
+          onClick={onBack}
+          style={{
+            position: "absolute",
+            top: "1rem",
+            right: "1rem",
+            zIndex: 100,
+            padding: "0.6rem 1.25rem",
+            borderRadius: "6px",
+            border: "none",
+            cursor: "pointer",
+            background: "rgba(26, 31, 46, 0.9)",
+            backdropFilter: "blur(8px)",
+            color: "#e6edf3",
+            fontSize: "0.9rem",
+            fontWeight: 500,
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            transition: "background 0.2s, transform 0.15s",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "rgba(26, 31, 46, 1)";
+            e.currentTarget.style.transform = "translateY(-1px)";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "rgba(26, 31, 46, 0.9)";
+            e.currentTarget.style.transform = "translateY(0)";
+          }}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              d="M10 12L6 8L10 4"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          Back to Map
+        </button>
+      )}
+    </div>
+  );
 }

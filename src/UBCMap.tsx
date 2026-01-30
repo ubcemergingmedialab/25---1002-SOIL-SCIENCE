@@ -17,8 +17,12 @@ const placeholderImage =
 
 export default function UBCMap({
   openViewer,
+  mapLoaded,
+  setMapLoaded,
 }: {
   openViewer: (path?: string, markers?: Array<Record<string, unknown>>) => void;
+  mapLoaded: boolean;
+  setMapLoaded: (loaded: boolean) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
@@ -26,8 +30,8 @@ export default function UBCMap({
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
   const pinToMarkerRef = useRef<Map<number, google.maps.Marker>>(new Map());
   const [pins, setPins] = useState<Pin[]>([]);
-  const [mapLoaded, setMapLoaded] = useState(false);
   const [selectedPinIndex, setSelectedPinIndex] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   //
   // -------------------------------------------------------------------
@@ -253,6 +257,7 @@ export default function UBCMap({
           const infoWindow = new google.maps.InfoWindow({
             content,
             maxWidth: 480,
+            disableAutoPan: true,
           });
 
           infoWindow.open({
@@ -285,6 +290,22 @@ export default function UBCMap({
     };
   }, [pins, mapLoaded]);
 
+  // Helper to pan with the pin in the lower portion of the viewport (leaving room for InfoWindow)
+  const panToWithOffset = (map: google.maps.Map, position: google.maps.LatLng) => {
+    const bounds = map.getBounds();
+    if (!bounds) {
+      map.panTo(position);
+      return;
+    }
+    // Calculate the vertical span and offset the center so pin is in lower 1/3 of viewport
+    const ne = bounds.getNorthEast();
+    const sw = bounds.getSouthWest();
+    const latSpan = ne.lat() - sw.lat();
+    // Offset center northward so pin appears lower
+    const offsetLat = position.lat() + latSpan * 0.25;
+    map.panTo({ lat: offsetLat, lng: position.lng() });
+  };
+
   const handlePinMenuClick = (index: number) => {
     setSelectedPinIndex(index);
     
@@ -296,17 +317,20 @@ export default function UBCMap({
         const marker = pinToMarkerRef.current.get(index);
         if (marker && mapRef.current) {
           const position = marker.getPosition()!;
-          // First pan to the marker
+          // First pan to the marker area
           mapRef.current.panTo(position);
           // Wait for pan to complete, then zoom and trigger click
-          const idleListener = google.maps.event.addListenerOnce(
+          google.maps.event.addListenerOnce(
             mapRef.current,
             "idle",
             () => {
               mapRef.current!.setZoom(15);
-              // Wait for zoom to complete, then trigger click
+              // Wait for zoom to complete, then offset pan and trigger click
               google.maps.event.addListenerOnce(mapRef.current!, "idle", () => {
-                google.maps.event.trigger(marker, "click");
+                panToWithOffset(mapRef.current!, position);
+                google.maps.event.addListenerOnce(mapRef.current!, "idle", () => {
+                  google.maps.event.trigger(marker, "click");
+                });
               });
             }
           );
@@ -322,12 +346,11 @@ export default function UBCMap({
     const marker = pinToMarkerRef.current.get(index);
     if (marker && mapRef.current) {
       const position = marker.getPosition()!;
-      // First pan to the marker
-      mapRef.current.panTo(position);
-      // Wait for pan to complete, then zoom and trigger click
+      // First zoom, then offset pan
+      mapRef.current.setZoom(15);
       google.maps.event.addListenerOnce(mapRef.current, "idle", () => {
-        mapRef.current!.setZoom(15);
-        // Wait for zoom to complete, then trigger click
+        panToWithOffset(mapRef.current!, position);
+        // Wait for offset pan to complete, then trigger click
         google.maps.event.addListenerOnce(mapRef.current!, "idle", () => {
           google.maps.event.trigger(marker, "click");
         });
@@ -342,24 +365,56 @@ export default function UBCMap({
         style={{
           width: "240px",
           flexShrink: 0,
-          backgroundColor: "#1a1f2e",
+          backgroundColor: "rgba(255, 255, 255, 0.06)",
           borderRadius: 6,
           padding: "1rem",
-          maxHeight: "60vh",
+          height: "60vh",
           overflowY: "auto",
-          border: "1px solid rgba(255, 255, 255, 0.1)",
+          border: "1px solid rgba(255, 255, 255, 0.08)",
+          boxSizing: "border-box",
         }}
       >
-        <h3 style={{ margin: "0 0 1rem 0", fontSize: "1.1rem", color: "#e6edf3", fontWeight: 600 }}>
+        <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1.1rem", color: "#e6edf3", fontWeight: 600 }}>
           Locations
         </h3>
+        <input
+          type="text"
+          placeholder="Search locations..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          style={{
+            width: "100%",
+            padding: "0.5rem 0.75rem",
+            marginBottom: "0.75rem",
+            borderRadius: "4px",
+            border: "1px solid rgba(255, 255, 255, 0.1)",
+            backgroundColor: "rgba(255, 255, 255, 0.04)",
+            color: "#e6edf3",
+            fontSize: "0.875rem",
+            outline: "none",
+            boxSizing: "border-box",
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.2)";
+            e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.08)";
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.1)";
+            e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.04)";
+          }}
+        />
         {pins.length === 0 ? (
           <div style={{ color: "#9aa4b5", fontSize: "0.9rem", padding: "1rem 0" }}>
             Loading locations...
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
-            {pins.map((pin, index) => (
+            {pins
+              .map((pin, index) => ({ pin, index }))
+              .filter(({ pin }) =>
+                (pin.title || "").toLowerCase().includes(searchQuery.toLowerCase())
+              )
+              .map(({ pin, index }) => (
               <button
                 key={index}
                 className="location-btn"
@@ -394,6 +449,13 @@ export default function UBCMap({
                 {pin.title || `Location ${index + 1}`}
               </button>
             ))}
+            {pins.filter((pin) =>
+              (pin.title || "").toLowerCase().includes(searchQuery.toLowerCase())
+            ).length === 0 && searchQuery && (
+              <div style={{ color: "#9aa4b5", fontSize: "0.85rem", padding: "0.5rem 0", textAlign: "center" }}>
+                No locations found
+              </div>
+            )}
           </div>
         )}
       </aside>

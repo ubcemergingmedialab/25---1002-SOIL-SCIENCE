@@ -1,16 +1,36 @@
+import { useState } from "react";
 import "./index.css";
 import UBCMap from "./UBCMap";
+import Viewer from "./Viewer";
+
+type ViewerState = {
+  path: string;
+  markers?: Array<Record<string, unknown>>;
+} | null;
 
 export default function App() {
+  const [viewerState, setViewerState] = useState<ViewerState>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+
   const openViewer = (path?: string, markers?: Array<Record<string, unknown>>) => {
     if (!path) return;
-    const url = new URL("/viewer", window.location.href);
-    url.searchParams.set("gaussianPath", path);
-    if (markers && markers.length > 0) {
-      url.searchParams.set("markers", JSON.stringify(markers));
-    }
-    window.open(url.href, "_blank", "noopener,noreferrer");
+    setViewerState({ path, markers });
   };
+
+  const closeViewer = () => {
+    setViewerState(null);
+  };
+
+  // When viewing, show the embedded viewer instead of the main page
+  if (viewerState) {
+    return (
+      <Viewer
+        gaussianPath={viewerState.path}
+        markers={viewerState.markers}
+        onBack={closeViewer}
+      />
+    );
+  }
 
   return (
     <div className="app" style={{ minHeight: "100dvh" }}>
@@ -18,15 +38,14 @@ export default function App() {
         <div style={{ textAlign: "center", maxWidth: 520 }}>
           <h1 style={{ marginBottom: "1rem" }}>Virtual Soils</h1>
           <p style={{ margin: 0, lineHeight: 1.6, color: "#9aa4b5" }}>
-            Browse the map below and select a field pin to launch its interactive 3D capture in a
-            new tab.
+            Browse the map below and select a field pin to launch its interactive 3D capture.
           </p>
         </div>
       </section>
 
       <section style={{ padding: "0 1rem 2rem" }}>
         <div className="contentWidth">
-          <UBCMap openViewer={openViewer} />
+          <UBCMap openViewer={openViewer} mapLoaded={mapLoaded} setMapLoaded={setMapLoaded} />
         </div>
       </section>
 
