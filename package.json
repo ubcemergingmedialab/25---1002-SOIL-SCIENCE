@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@mkkellogg/gaussian-splats-3d": "^0.4.7",
+    "aws-amplify": "^6.16.0",
     "aws4fetch": "^1.0.20",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
