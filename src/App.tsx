@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import "./index.css";
 import UBCMap from "./UBCMap";
 import Viewer from "./Viewer";
@@ -39,6 +40,24 @@ export default function App() {
           <h1 style={{ marginBottom: "1rem" }}>Virtual Soils</h1>
           <p style={{ margin: 0, lineHeight: 1.6, color: "#9aa4b5" }}>
             Browse the map below and select a field pin to launch its interactive 3D capture.
+          </p>
+          <p style={{ marginTop: "1rem" }}>
+            <Link
+              to="/editor"
+              className="btn btn-sec-hov"
+              style={{
+                display: "inline-block",
+                padding: "0.5rem 1rem",
+                borderRadius: 6,
+                background: "rgba(255,255,255,0.08)",
+                color: "#e6edf3",
+                textDecoration: "none",
+                fontSize: "0.9rem",
+                border: "1px solid rgba(255,255,255,0.15)",
+              }}
+            >
+              Open Marker Editor (testing)
+            </Link>
           </p>
         </div>
       </section>

@@ -181,7 +181,15 @@ export class FlyControls {
 
   // --- Keyboard handlers ---
 
+  private static isTypingTarget(el: EventTarget | null): boolean {
+    if (!el || !(el instanceof Element)) return false;
+    const tag = (el as HTMLElement).tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+    return (el as HTMLElement).isContentEditable === true;
+  }
+
   private handleKeyDown(e: KeyboardEvent) {
+    if (FlyControls.isTypingTarget(document.activeElement)) return;
     if (e.code === "KeyW") this.moving.f = true;
     if (e.code === "KeyS") this.moving.b = true;
     if (e.code === "KeyA") this.moving.l = true;
@@ -191,6 +199,7 @@ export class FlyControls {
   }
 
   private handleKeyUp(e: KeyboardEvent) {
+    if (FlyControls.isTypingTarget(document.activeElement)) return;
     if (e.code === "KeyW") this.moving.f = false;
     if (e.code === "KeyS") this.moving.b = false;
     if (e.code === "KeyA") this.moving.l = false;

@@ -16,7 +16,8 @@ interface GSViewer {
   update(): void;
   render(): void;
   dispose(): void;
-  clear?(): void;
+  getSceneCount?(): number;
+  removeSplatScenes?(indexes: number[], showLoadingUI?: boolean): Promise<void>;
 }
 
 // Constructor type for the lib's Viewer
@@ -117,7 +118,14 @@ export class GaussianViewer {
 
     try {
       if (this.destroyed || token !== this.loadToken) return;
-      this.viewer.clear?.();
+
+      const count = this.viewer.getSceneCount?.() ?? 0;
+      if (count > 0 && typeof this.viewer.removeSplatScenes === "function") {
+        const indexes = Array.from({ length: count }, (_, i) => i);
+        await this.viewer.removeSplatScenes(indexes, false);
+      }
+      if (this.destroyed || token !== this.loadToken) return;
+
       await this.viewer.addSplatScene(path, {
         position: [0, 0, 0],
         scale: [1, 1, 1],

@@ -1,0 +1,531 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import * as THREE from "three";
+import { ThreeApp } from "./three/ThreeApp";
+import type { MarkerInput } from "./three/WorldMarkers";
+import { awsClient } from "./lib/awsClient";
+import "./index.css";
+
+const PLACEMENT_DISTANCE_DEFAULT = 1;
+
+/** Four marker icon options: markerIcon1–4. Rendered same as DB markers. */
+const MARKER_ICON_OPTIONS: { value: string; label: string }[] = [
+  { value: "/assets/icons/markerIcon1.png", label: "Marker Icon 1" },
+  { value: "/assets/icons/markerIcon2.png", label: "Marker Icon 2" },
+  { value: "/assets/icons/markerIcon3.png", label: "Marker Icon 3" },
+  { value: "/assets/icons/markerIcon4.png", label: "Marker Icon 4" },
+];
+
+type EditorMarker = {
+  position: [number, number, number];
+  radius?: number;
+  label?: string;
+  icon?: string;
+};
+
+type Pin = {
+  title: string;
+  path: string;
+  markers?: Array<Record<string, unknown>>;
+};
+
+const resolveAssetUrl = (raw: string) => {
+  if (/^(https?:|blob:|data:)/i.test(raw)) return raw;
+  if (raw.startsWith("/")) return new URL(raw, window.location.origin).href;
+  return new URL(`/${raw}`, window.location.origin).href;
+};
+
+function parseApiMarkers(raw: Array<Record<string, unknown>> | undefined): EditorMarker[] {
+  if (!raw || !Array.isArray(raw)) return [];
+  return raw
+    .map((m) => {
+      const pos = m.position as { x?: number; y?: number; z?: number } | undefined;
+      const x = pos?.x;
+      const y = pos?.y;
+      const z = pos?.z;
+      if (![x, y, z].every((v) => typeof v === "number" && Number.isFinite(v))) return null;
+      const scale = typeof m.scale === "number" && Number.isFinite(m.scale) ? m.scale : undefined;
+      return {
+        position: [x, y, z],
+        radius: scale,
+        label: typeof m.text === "string" ? m.text : "",
+        icon: typeof m.icon === "string" ? m.icon : undefined,
+      };
+    })
+    .filter(Boolean) as EditorMarker[];
+}
+
+function editorMarkersToInput(
+  markers: EditorMarker[],
+  textureCache: Map<string, THREE.Texture>
+): MarkerInput[] {
+  const loader = new THREE.TextureLoader();
+  const toTexture = (icon?: string) => {
+    if (!icon) return undefined;
+    const resolved = resolveAssetUrl(icon);
+    const cached = textureCache.get(resolved);
+    if (cached) return cached;
+    const texture = loader.load(resolved);
+    textureCache.set(resolved, texture);
+    return texture;
+  };
+  return markers.map((m) => ({
+    position: m.position,
+    radius: m.radius,
+    label: typeof m.label === "string" ? m.label : "",
+    texture: toTexture(m.icon),
+  }));
+}
+
+function getTextureForIcon(iconUrl: string, textureCache: Map<string, THREE.Texture>): THREE.Texture | undefined {
+  if (!iconUrl.trim()) return undefined;
+  const resolved = resolveAssetUrl(iconUrl);
+  const cached = textureCache.get(resolved);
+  if (cached) return cached;
+  const loader = new THREE.TextureLoader();
+  const texture = loader.load(resolved);
+  textureCache.set(resolved, texture);
+  return texture;
+}
+
+export default function Editor() {
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const appRef = useRef<ThreeApp | null>(null);
+  const textureCacheRef = useRef<Map<string, THREE.Texture>>(new Map());
+  const [searchParams] = useSearchParams();
+
+  const [pins, setPins] = useState<Pin[]>([]);
+  const [selectedPinIndex, setSelectedPinIndex] = useState<number>(0);
+  const [markers, setMarkers] = useState<EditorMarker[]>([]);
+  const [mode, setMode] = useState<"preview" | "place" | "edit">("preview");
+  const [placementDistance, setPlacementDistance] = useState(PLACEMENT_DISTANCE_DEFAULT);
+  const [selectedMarkerIndex, setSelectedMarkerIndex] = useState<number | null>(null);
+  const [placementIconIndex, setPlacementIconIndex] = useState(0);
+  const [placementRadius, setPlacementRadius] = useState(0.1);
+
+  const syncMarkersToApp = useCallback(() => {
+    if (!appRef.current) return;
+    const input = editorMarkersToInput(markers, textureCacheRef.current);
+    const iconUrl = MARKER_ICON_OPTIONS[placementIconIndex]?.value ?? MARKER_ICON_OPTIONS[0].value;
+    const preview =
+      mode === "place"
+        ? {
+            position: [0, 0, 0] as [number, number, number],
+            radius: placementRadius,
+            texture: getTextureForIcon(iconUrl, textureCacheRef.current),
+            label: "",
+          }
+        : undefined;
+    const selectedIndex = mode === "edit" ? selectedMarkerIndex : undefined;
+    appRef.current.setWorldMarkers(input, preview, selectedIndex);
+  }, [markers, mode, placementRadius, placementIconIndex, selectedMarkerIndex]);
+
+  useEffect(() => {
+    if (!wrapRef.current) return;
+    const app = new ThreeApp(wrapRef.current);
+    appRef.current = app;
+
+    const pathFromUrl = searchParams.get("gaussianPath") || searchParams.get("path");
+    const markersParam = searchParams.get("markers");
+    if (pathFromUrl) {
+      const resolved =
+        pathFromUrl.startsWith("/") || /^(https?:|blob:|data:)/i.test(pathFromUrl)
+          ? pathFromUrl.startsWith("/")
+            ? new URL(pathFromUrl, window.location.origin).href
+            : pathFromUrl
+          : new URL(pathFromUrl, window.location.href).href;
+      app.loadGaussianScene(resolved);
+    }
+    if (markersParam) {
+      try {
+        const parsed = JSON.parse(markersParam) as Array<Record<string, unknown>>;
+        setMarkers(parseApiMarkers(parsed));
+      } catch {
+        // ignore
+      }
+    }
+
+    return () => {
+      app.dispose();
+      appRef.current = null;
+    };
+  }, [searchParams]);
+
+  useEffect(() => {
+    syncMarkersToApp();
+  }, [syncMarkersToApp]);
+
+  useEffect(() => {
+    if (!appRef.current) return;
+
+    if (mode === "preview") {
+      appRef.current.setPlacementDistance(0);
+      appRef.current.setEditorCallbacks({});
+    } else if (mode === "place") {
+      appRef.current.setPlacementDistance(placementDistance);
+      appRef.current.setEditorCallbacks({
+        onPlaceClick: () => {
+          const pos = appRef.current!.getPlacementPosition();
+          const iconUrl = MARKER_ICON_OPTIONS[placementIconIndex]?.value ?? MARKER_ICON_OPTIONS[0].value;
+          const newMarker: EditorMarker = {
+            position: [pos.x, pos.y, pos.z],
+            radius: placementRadius,
+            label: "New marker",
+            icon: iconUrl,
+          };
+          setMarkers((prev) => [...prev, newMarker]);
+        },
+      });
+    } else {
+      appRef.current.setPlacementDistance(0);
+      appRef.current.setEditorCallbacks({
+        onMarkerClick: (index) => setSelectedMarkerIndex(index),
+      });
+    }
+  }, [mode, placementDistance, placementIconIndex, placementRadius, markers]);
+
+  useEffect(() => {
+    const next = pins.length;
+    if (next > 0 && selectedPinIndex >= next) setSelectedPinIndex(0);
+  }, [pins.length, selectedPinIndex]);
+
+  useEffect(() => {
+    if (pins.length === 0) return;
+    if (searchParams.get("gaussianPath") || searchParams.get("path")) return;
+    const pin = pins[selectedPinIndex];
+    if (!pin?.path) return;
+    const resolved =
+      pin.path.startsWith("/") || /^(https?:|blob:|data:)/i.test(pin.path)
+        ? pin.path.startsWith("/")
+          ? new URL(pin.path, window.location.origin).href
+          : pin.path
+        : new URL(pin.path, window.location.href).href;
+    setMarkers(parseApiMarkers(pin.markers ?? []));
+    setSelectedMarkerIndex(null);
+    appRef.current?.loadGaussianScene(resolved);
+  }, [pins, selectedPinIndex, searchParams]);
+
+  useEffect(() => {
+    awsClient
+      .fetch(`${import.meta.env.VITE_API_URL}/pins`, { method: "GET" })
+      .then((r) => r.json())
+      .then((data: Array<{ title?: string; path?: string; markers?: Array<Record<string, unknown>> }>) => {
+        const next: Pin[] = (data ?? []).map((p) => ({
+          title: p.title ?? "",
+          path: p.path ?? "",
+          markers: p.markers ?? [],
+        }));
+        setPins(next);
+        if (next.length > 0 && !searchParams.get("gaussianPath") && !searchParams.get("path")) {
+          setSelectedPinIndex(0);
+        }
+      })
+      .catch((err) => console.error("Failed to load pins for editor", err));
+  }, [searchParams]);
+
+  const selectedMarker = selectedMarkerIndex !== null ? markers[selectedMarkerIndex] : null;
+
+  return (
+    <div className="threeWrap" style={{ display: "flex", flexDirection: "row" }}>
+      <div ref={wrapRef} style={{ flex: 1, position: "relative", minHeight: "100vh" }} />
+
+      <aside
+        style={{
+          width: 280,
+          flexShrink: 0,
+          background: "rgba(26, 31, 46, 0.95)",
+          borderLeft: "1px solid rgba(255,255,255,0.1)",
+          padding: "1rem",
+          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: "1rem",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
+          <Link
+            to="/"
+            style={{
+              padding: "0.5rem 0.75rem",
+              borderRadius: 6,
+              background: "rgba(255,255,255,0.1)",
+              color: "#e6edf3",
+              textDecoration: "none",
+              fontSize: "0.9rem",
+            }}
+          >
+            ← Back to Map
+          </Link>
+        </div>
+
+        <h3 style={{ margin: 0, fontSize: "1rem", color: "#e6edf3" }}>Scene</h3>
+        {pins.length > 0 && (
+        <select
+          value={selectedPinIndex}
+          onChange={(e) => setSelectedPinIndex(Number(e.target.value))}
+          style={{
+            width: "100%",
+            padding: "0.5rem 0.75rem",
+            borderRadius: 6,
+            border: "1px solid rgba(255,255,255,0.2)",
+            background: "rgba(0,0,0,0.3)",
+            color: "#e6edf3",
+            fontSize: "0.875rem",
+          }}
+        >
+          {pins.map((pin, i) => (
+            <option key={i} value={i}>
+              {pin.title || `Location ${i + 1}`}
+            </option>
+          ))}
+        </select>
+        )}
+
+        <h3 style={{ margin: 0, fontSize: "1rem", color: "#e6edf3" }}>Mode</h3>
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          {(["preview", "place", "edit"] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              style={{
+                padding: "0.4rem 0.75rem",
+                borderRadius: 6,
+                border: "1px solid rgba(255,255,255,0.2)",
+                background: mode === m ? "rgba(59, 130, 246, 0.4)" : "rgba(255,255,255,0.06)",
+                color: "#e6edf3",
+                fontSize: "0.8rem",
+                textTransform: "capitalize",
+                cursor: "pointer",
+              }}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+
+        {mode === "place" && (
+          <>
+          <div>
+            <label style={{ fontSize: "0.8rem", color: "#9aa4b5" }}>
+              Placement distance: {placementDistance.toFixed(1)}m
+            </label>
+            <input
+              type="range"
+              min={1}
+              max={10}
+              step={0.5}
+              value={placementDistance}
+              onChange={(e) => setPlacementDistance(Number(e.target.value))}
+              style={{ width: "100%", marginTop: "0.25rem" }}
+            />
+          </div>
+          <div>
+            <h3 style={{ margin: 0, fontSize: "0.9rem", color: "#e6edf3" }}>Preview style</h3>
+            <label style={{ fontSize: "0.8rem", color: "#9aa4b5" }}>Icon</label>
+            <select
+              value={placementIconIndex}
+              onChange={(e) => setPlacementIconIndex(Number(e.target.value))}
+              style={{
+                width: "100%",
+                padding: "0.4rem 0.6rem",
+                marginTop: "0.25rem",
+                borderRadius: 6,
+                border: "1px solid rgba(255,255,255,0.2)",
+                background: "rgba(0,0,0,0.3)",
+                color: "#e6edf3",
+                fontSize: "0.875rem",
+              }}
+            >
+              {MARKER_ICON_OPTIONS.map((opt, i) => (
+                <option key={i} value={i}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <label style={{ display: "block", fontSize: "0.8rem", color: "#9aa4b5", marginTop: "0.5rem" }}>
+              Radius: {placementRadius.toFixed(2)}
+            </label>
+            <input
+              type="range"
+              min={0.01}
+              max={1}
+              step={0.01}
+              value={placementRadius}
+              onChange={(e) => setPlacementRadius(Number(e.target.value))}
+              style={{ width: "100%", marginTop: "0.25rem" }}
+            />
+          </div>
+          </>
+        )}
+
+        <h3 style={{ margin: 0, fontSize: "1rem", color: "#e6edf3" }}>Markers ({markers.length})</h3>
+        <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+          {markers.map((m, i) => (
+            <li key={i}>
+              <button
+                onClick={() => mode === "edit" && setSelectedMarkerIndex(i)}
+                style={{
+                  width: "100%",
+                  padding: "0.4rem 0.6rem",
+                  borderRadius: 4,
+                  border: "1px solid transparent",
+                  background: selectedMarkerIndex === i ? "rgba(59, 130, 246, 0.3)" : "rgba(255,255,255,0.04)",
+                  color: selectedMarkerIndex === i ? "#fff" : "#b8c2d1",
+                  fontSize: "0.8rem",
+                  textAlign: "left",
+                  cursor: mode === "edit" ? "pointer" : "default",
+                }}
+              >
+                {m.label || `Marker ${i + 1}`}
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        {mode === "edit" && selectedMarker && selectedMarkerIndex !== null && (
+          <div>
+            <h3 style={{ margin: 0, fontSize: "1rem", color: "#e6edf3" }}>Edit marker</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.5rem" }}>
+              <div>
+                <label style={{ fontSize: "0.8rem", color: "#9aa4b5" }}>Label</label>
+                <input
+                  type="text"
+                  value={selectedMarker.label ?? ""}
+                  onChange={(e) =>
+                    setMarkers((prev) => {
+                      const next = [...prev];
+                      next[selectedMarkerIndex] = { ...next[selectedMarkerIndex], label: e.target.value };
+                      return next;
+                    })
+                  }
+                  style={{
+                    width: "100%",
+                    padding: "0.4rem 0.6rem",
+                    marginTop: "0.25rem",
+                    borderRadius: 6,
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    background: "rgba(0,0,0,0.3)",
+                    color: "#e6edf3",
+                    fontSize: "0.875rem",
+                  }}
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "0.8rem", color: "#9aa4b5" }}>Icon</label>
+                <select
+                  value={Math.max(
+                    0,
+                    MARKER_ICON_OPTIONS.findIndex((o) => o.value === (selectedMarker.icon ?? ""))
+                  )}
+                  onChange={(e) => {
+                    const i = Number(e.target.value);
+                    const icon = MARKER_ICON_OPTIONS[i]?.value ?? "";
+                    setMarkers((prev) => {
+                      const next = [...prev];
+                      next[selectedMarkerIndex] = { ...next[selectedMarkerIndex], icon: icon || undefined };
+                      return next;
+                    });
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "0.4rem 0.6rem",
+                    marginTop: "0.25rem",
+                    borderRadius: 6,
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    background: "rgba(0,0,0,0.3)",
+                    color: "#e6edf3",
+                    fontSize: "0.875rem",
+                  }}
+                >
+                  {MARKER_ICON_OPTIONS.map((opt, i) => (
+                    <option key={i} value={i}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: "0.8rem", color: "#9aa4b5" }}>Radius (size)</label>
+                <input
+                  type="number"
+                  step={0.01}
+                  min={0.01}
+                  max={1}
+                  value={selectedMarker.radius ?? 0.25}
+                  onChange={(e) =>
+                    setMarkers((prev) => {
+                      const next = [...prev];
+                      next[selectedMarkerIndex] = { ...next[selectedMarkerIndex], radius: Number(e.target.value) };
+                      return next;
+                    })
+                  }
+                  style={{
+                    width: "100%",
+                    padding: "0.4rem 0.6rem",
+                    marginTop: "0.25rem",
+                    borderRadius: 6,
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    background: "rgba(0,0,0,0.3)",
+                    color: "#e6edf3",
+                    fontSize: "0.875rem",
+                  }}
+                />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.25rem" }}>
+                {(["x", "y", "z"] as const).map((axis, i) => (
+                  <div key={axis}>
+                    <label style={{ fontSize: "0.75rem", color: "#9aa4b5" }}>{axis.toUpperCase()}</label>
+                    <input
+                      type="number"
+                      step={0.1}
+                      value={selectedMarker.position[i] ?? 0}
+                      onChange={(e) =>
+                        setMarkers((prev) => {
+                          const next = [...prev];
+                          const pos = [...(next[selectedMarkerIndex].position ?? [0, 0, 0])] as [number, number, number];
+                          pos[i] = Number(e.target.value);
+                          next[selectedMarkerIndex] = { ...next[selectedMarkerIndex], position: pos };
+                          return next;
+                        })
+                      }
+                      style={{
+                        width: "100%",
+                        padding: "0.35rem 0.4rem",
+                        marginTop: "0.2rem",
+                        borderRadius: 6,
+                        border: "1px solid rgba(255,255,255,0.2)",
+                        background: "rgba(0,0,0,0.3)",
+                        color: "#e6edf3",
+                        fontSize: "0.8rem",
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setMarkers((prev) => prev.filter((_, i) => i !== selectedMarkerIndex));
+                setSelectedMarkerIndex(null);
+              }}
+              style={{
+                marginTop: "0.75rem",
+                padding: "0.4rem 0.75rem",
+                borderRadius: 6,
+                border: "1px solid rgba(239, 68, 68, 0.5)",
+                background: "rgba(239, 68, 68, 0.2)",
+                color: "#fca5a5",
+                fontSize: "0.85rem",
+                cursor: "pointer",
+                width: "100%",
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        )}
+      </aside>
+    </div>
+  );
+}

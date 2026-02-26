@@ -15,21 +15,33 @@ export class MarkerPickingController {
   private movedTooMuch = false;
   private readonly moveThresholdPx: number;
 
+  private onMarkerClick?: (index: number) => void;
+  private onPlaceClick?: () => void;
+
   constructor(opts: {
     dom: HTMLElement;
     camera: THREE.Camera;
     markers: WorldMarkers;
     moveThresholdPx?: number;
+    onMarkerClick?: (index: number) => void;
+    onPlaceClick?: () => void;
   }) {
     this.dom = opts.dom;
     this.camera = opts.camera;
     this.markers = opts.markers;
     this.moveThresholdPx = opts.moveThresholdPx ?? 5;
+    this.onMarkerClick = opts.onMarkerClick;
+    this.onPlaceClick = opts.onPlaceClick;
 
     this.dom.addEventListener("pointerdown", this.onDown);
     this.dom.addEventListener("pointermove", this.onMove);
     this.dom.addEventListener("pointerup", this.onUp);
     this.dom.addEventListener("pointercancel", this.onUp);
+  }
+
+  setEditorCallbacks(callbacks: { onMarkerClick?: (index: number) => void; onPlaceClick?: () => void }) {
+    this.onMarkerClick = callbacks.onMarkerClick;
+    this.onPlaceClick = callbacks.onPlaceClick;
   }
 
   dispose() {
@@ -92,7 +104,10 @@ export class MarkerPickingController {
     const downHit = this.downHit;
     this.downHit = null;
 
-    if (!downHit || !upHit || upHit !== downHit) return;
+    if (!downHit || !upHit || upHit !== downHit) {
+      if (this.onPlaceClick && !downHit && !upHit) this.onPlaceClick();
+      return;
+    }
 
     const sprites = this.markers.getSprites();
 
@@ -102,7 +117,13 @@ export class MarkerPickingController {
       return;
     }
 
-    // marker sprite -> toggle
+    const markerIndex = sprites.indexOf(downHit as THREE.Sprite);
+    if (this.onMarkerClick !== undefined) {
+      this.onMarkerClick(markerIndex);
+      return;
+    }
+
+    // marker sprite -> toggle 
     this.markers.toggleLabelForSprite(downHit as THREE.Sprite, this.camera);
   };
 }

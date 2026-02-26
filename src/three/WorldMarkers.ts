@@ -21,36 +21,46 @@ export class WorldMarkers {
   private labelSprite?: THREE.Sprite;
   private labelTarget?: THREE.Sprite;
 
+  private placementPreviewSprite?: THREE.Sprite;
+
   constructor() {
     this.defaultTexture = WorldMarkers.createDefaultTexture();
   }
 
-  setMarkers(markers: MarkerInput[]) {
+  setMarkers(markers: MarkerInput[], previewMarker?: MarkerInput | null, selectedIndex?: number | null) {
     this.clearMarkers();
     this.clearLabel();
+    if (this.placementPreviewSprite) {
+      this.scene.remove(this.placementPreviewSprite);
+      this.placementPreviewSprite.material.dispose();
+      this.placementPreviewSprite = undefined;
+    }
 
-    for (const m of markers) {
+    const list = previewMarker ? [...markers, previewMarker] : markers;
+    for (let i = 0; i < list.length; i++) {
+      const m = list[i];
+      const isPreview = previewMarker != null && i === list.length - 1;
       const pos = WorldMarkers.toVector3(m.position);
       const radius = m.radius ?? 0.25;
       const texture = m.texture ?? this.defaultTexture;
-
-      const mat = new THREE.SpriteMaterial({
-        map: texture,
-        color: m.color ?? "#ffffff",
-        depthTest: true,
-        depthWrite: true,
-        transparent: true,
-        alphaTest: 0.4,
-      });
-
-      const sprite = new THREE.Sprite(mat);
-      sprite.position.copy(pos);
-      sprite.scale.setScalar(radius * 2);
-      sprite.userData = { label: m.label ?? "", radius };
-
+      const isSelected = !isPreview && selectedIndex != null && i === selectedIndex;
+      const color = isSelected ? "#3b82f6" : (m.color ?? "#ffffff");
+      const sprite = WorldMarkers.createMarkerSprite(pos, radius, texture, color);
+      if (isPreview) {
+        this.placementPreviewSprite = sprite;
+        this.placementPreviewSprite.userData = { isPlacementPreview: true };
+      } else {
+        sprite.userData = { label: m.label ?? "", radius };
+        this.sprites.push(sprite);
+      }
       this.scene.add(sprite);
-      this.sprites.push(sprite);
     }
+  }
+
+  /** Update the placement preview position (called each frame when in place mode). */
+  setPlacementPreviewPosition(position: THREE.Vector3 | [number, number, number]) {
+    if (!this.placementPreviewSprite) return;
+    this.placementPreviewSprite.position.copy(WorldMarkers.toVector3(position));
   }
 
   // might use this later
@@ -67,7 +77,8 @@ export class WorldMarkers {
   }
 
   getPickableObjects(): readonly THREE.Object3D[] {
-    return this.labelSprite ? [this.labelSprite, ...this.sprites] : this.sprites;
+    const list = this.labelSprite ? [this.labelSprite, ...this.sprites] : [...this.sprites];
+    return list;
   }
 
   toggleLabelForSprite(sprite: THREE.Sprite, camera?: THREE.Camera) {
@@ -88,6 +99,11 @@ export class WorldMarkers {
 
   dispose() {
     this.clearLabel();
+    if (this.placementPreviewSprite) {
+      this.scene.remove(this.placementPreviewSprite);
+      this.placementPreviewSprite.material.dispose();
+      this.placementPreviewSprite = undefined;
+    }
     this.clearMarkers();
     this.defaultTexture.dispose();
   }
@@ -119,12 +135,17 @@ export class WorldMarkers {
     const label = new THREE.Sprite(mat);
     label.position.copy(sprite.position);
 
-    const aspect =
-      texture.image instanceof HTMLCanvasElement && texture.image.height > 0
-        ? texture.image.width / texture.image.height
-        : 2;
+    const img = texture.image;
+    const pixelWidth = img?.width ?? 200;
+    const pixelHeight = img?.height ?? 100;
+    const aspect = pixelHeight > 0 ? pixelWidth / pixelHeight : 2;
 
-    const baseHeight = radius * 1.5;
+    // Size the box by content
+    const scale = 2;
+    const lineHeightLogical = 16 * 1.3;
+    const logicalHeight = pixelHeight / scale;
+    const numLines = Math.max(1, (logicalHeight - 16) / lineHeightLogical);
+    const baseHeightPerLine = radius * 0.65;
     const distScale =
       camera instanceof THREE.Camera
         ? THREE.MathUtils.clamp(
@@ -133,14 +154,13 @@ export class WorldMarkers {
             2.0
           )
         : 1;
-
-    const height = baseHeight * distScale;
+    const height = numLines * baseHeightPerLine * distScale;
     label.scale.set(height * aspect, height, 1);
 
     this.labelSprite = label;
     this.labelTarget = sprite;
 
-    sprite.visible = false; // hide marker button while label is visible
+    sprite.visible = false;
     this.scene.add(label);
   }
 
@@ -172,6 +192,27 @@ export class WorldMarkers {
     return Array.isArray(pos) ? new THREE.Vector3(pos[0], pos[1], pos[2]) : pos;
   }
 
+  /** configured like a real marker. */
+  private static createMarkerSprite(
+    position: THREE.Vector3,
+    radius: number,
+    texture: THREE.Texture,
+    color: THREE.ColorRepresentation = "#ffffff"
+  ): THREE.Sprite {
+    const mat = new THREE.SpriteMaterial({
+      map: texture,
+      color,
+      depthTest: true,
+      depthWrite: true,
+      transparent: true,
+      alphaTest: 0.4,
+    });
+    const sprite = new THREE.Sprite(mat);
+    sprite.position.copy(position);
+    sprite.scale.setScalar(radius * 2);
+    return sprite;
+  }
+
   private static createDefaultTexture(): THREE.Texture {
     const size = 256;
     const canvas = document.createElement("canvas");
@@ -182,21 +223,15 @@ export class WorldMarkers {
     if (!ctx) throw new Error("Unable to create canvas context for marker texture.");
 
     ctx.clearRect(0, 0, size, size);
-    const gradient = ctx.createRadialGradient(
-      size * 0.5,
-      size * 0.5,
-      size * 0.05,
-      size * 0.5,
-      size * 0.5,
-      size * 0.45
-    );
-    gradient.addColorStop(0, "rgba(255,255,255,1)");
-    gradient.addColorStop(1, "rgba(255,204,0,0)");
 
-    ctx.fillStyle = gradient;
+    ctx.fillStyle = "#ffffff";
     ctx.beginPath();
     ctx.arc(size * 0.5, size * 0.5, size * 0.45, 0, Math.PI * 2);
     ctx.fill();
+    // Slight edge 
+    ctx.strokeStyle = "rgba(255,255,255,0.9)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;

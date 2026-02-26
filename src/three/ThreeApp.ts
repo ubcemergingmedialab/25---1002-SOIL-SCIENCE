@@ -1,7 +1,8 @@
 // ThreeApp.ts
 import * as THREE from "three";
 import { FlyControls } from "./FlyControls";
-import { ScreenSpaceUI, PerformanceSettings, PERFORMANCE_PRESETS } from "./ScreenSpace";
+import type { PerformanceSettings } from "./ScreenSpace";
+import { ScreenSpaceUI, PERFORMANCE_PRESETS } from "./ScreenSpace";
 import { GaussianViewer } from "./GaussianViewer";
 import { WorldMarkers } from "./WorldMarkers";
 import { Skybox } from "./Skybox";
@@ -34,6 +35,8 @@ export class ThreeApp {
   // Resize
   private resizeObs?: ResizeObserver;
   private prevDpr = window.devicePixelRatio || 1;
+  private prevW = 0;
+  private prevH = 0;
 
   // Systems
   private controls!: FlyControls;
@@ -46,10 +49,19 @@ export class ThreeApp {
   // Picking
   private markerPicking!: MarkerPickingController;
 
+  // Editor: placement preview (distance in front of camera, preview marker is passed via setWorldMarkers)
+  private placementDistance = 0;
+
   // Debug
   private worldAxesScene = new THREE.Scene();
   private worldAxes?: THREE.AxesHelper;
   private playAreaBounds: THREE.Box3 | null = null;
+
+  // cene at reduced res, markers at full res
+  private sceneRenderTarget: THREE.WebGLRenderTarget | null = null;
+  private blitScene = new THREE.Scene();
+  private blitCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+  private blitQuad: THREE.Mesh | null = null;
 
 
   // ------------------
@@ -177,17 +189,47 @@ export class ThreeApp {
     this.screenUI.setPlayerWorldPosition(this.camera.position);
     this.screenUI.setFps(this.fps);
     this.screenUI.update();
+
+    if (this.placementDistance > 0) {
+      this.markers.setPlacementPreviewPosition(this.getPlacementPosition());
+    }
   }
 
   private renderFrame() {
-    // Skybox is relatively cheap, always render
-    this.skybox.render(this.renderer, this.camera);
-    
-    // Markers are cheap, always render
-    this.markers.render(this.renderer, this.camera);
-    
-    // Gaussian splats - the main performance bottleneck
-    this.gaussian.render();
+    if (this.sceneRenderTarget) {
+      // Low-quality path: render scene (skybox + gaussian) to reduced-res RT, then composite and draw markers at full res
+      this.renderer.setRenderTarget(this.sceneRenderTarget);
+      this.renderer.clear(true, true, true);
+      this.skybox.render(this.renderer, this.camera);
+      this.gaussian.render();
+
+      this.renderer.setRenderTarget(null);
+      this.renderer.clear(true, true, true);
+      this.ensureBlitQuad();
+      const mat = this.blitQuad!.material as THREE.MeshBasicMaterial;
+      mat.map = this.sceneRenderTarget!.texture;
+      this.renderer.render(this.blitScene, this.blitCamera);
+
+      // Markers (and label) at full resolution
+      this.markers.render(this.renderer, this.camera);
+    } else {
+      // Full quality path. everything to canvas
+      this.skybox.render(this.renderer, this.camera);
+      this.markers.render(this.renderer, this.camera);
+      this.gaussian.render();
+    }
+  }
+
+  private ensureBlitQuad() {
+    if (this.blitQuad) return;
+    const geo = new THREE.PlaneGeometry(2, 2);
+    const mat = new THREE.MeshBasicMaterial({
+      map: null,
+      depthTest: false,
+      depthWrite: false,
+    });
+    this.blitQuad = new THREE.Mesh(geo, mat);
+    this.blitScene.add(this.blitQuad);
   }
 
   private renderDebug() {
@@ -219,8 +261,36 @@ export class ThreeApp {
     this.markers.setEnvironmentMap(this.skybox.getEnvironmentMap());
   }
 
-  public setWorldMarkers(markers: Parameters<WorldMarkers["setMarkers"]>[0]) {
-    this.markers.setMarkers(markers);
+  public setWorldMarkers(
+    markers: Parameters<WorldMarkers["setMarkers"]>[0],
+    previewMarker?: Parameters<WorldMarkers["setMarkers"]>[1],
+    selectedIndex?: Parameters<WorldMarkers["setMarkers"]>[2]
+  ) {
+    this.markers.setMarkers(markers, previewMarker, selectedIndex);
+  }
+
+  public getCamera(): THREE.Camera {
+    return this.camera;
+  }
+
+  /** When > 0, placement preview is shown. update its position each frame via setPlacementPreviewPosition. */
+  public setPlacementDistance(distance: number) {
+    this.placementDistance = Math.max(0, distance);
+  }
+
+  /** Current world position of the placement preview (camera + forward * placementDistance). */
+  public getPlacementPosition(): THREE.Vector3 {
+    const forward = new THREE.Vector3(0, 0, -1)
+      .applyQuaternion(this.camera.quaternion)
+      .normalize();
+    return this.camera.position.clone().addScaledVector(forward, this.placementDistance);
+  }
+
+  public setEditorCallbacks(callbacks: {
+    onMarkerClick?: (index: number) => void;
+    onPlaceClick?: () => void;
+  }) {
+    this.markerPicking.setEditorCallbacks(callbacks);
   }
 
   public setPlayAreaBounds(bounds: THREE.Box3 | null | undefined) {
@@ -233,19 +303,50 @@ export class ThreeApp {
   //-------------------------------------------------------------------------
 
   private resizeToContainer(force = false) {
-    // Use pixel ratio from performance settings
-    const dpr = Math.min(window.devicePixelRatio || 1, this.perfSettings.pixelRatio);
-    if (!force && Math.abs(dpr - this.prevDpr) < 0.001) return;
-
-    this.prevDpr = dpr;
-
     const w = Math.max(1, this.container.clientWidth);
     const h = Math.max(1, this.container.clientHeight);
+    const canvasDpr = window.devicePixelRatio || 1;
 
-    this.renderer.setPixelRatio(dpr);
+    if (!force && this.prevDpr === canvasDpr && this.prevW === w && this.prevH === h) {
+      const sceneDpr = Math.min(canvasDpr, this.perfSettings.pixelRatio);
+      if (sceneDpr >= canvasDpr - 0.01) return; // no RT path
+      const rtw = Math.max(1, Math.round(w * sceneDpr));
+      const rth = Math.max(1, Math.round(h * sceneDpr));
+      if (this.sceneRenderTarget && this.sceneRenderTarget.width === rtw && this.sceneRenderTarget.height === rth) {
+        return;
+      }
+    }
+    this.prevDpr = canvasDpr;
+    this.prevW = w;
+    this.prevH = h;
+
+    this.renderer.setPixelRatio(canvasDpr);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+
+    // When quality is low, use a reduced-resolution render target for the 3D scene only
+    const sceneDpr = Math.min(canvasDpr, this.perfSettings.pixelRatio);
+    if (sceneDpr < canvasDpr - 0.01) {
+      const rtw = Math.max(1, Math.round(w * sceneDpr));
+      const rth = Math.max(1, Math.round(h * sceneDpr));
+      if (!this.sceneRenderTarget) {
+        this.sceneRenderTarget = new THREE.WebGLRenderTarget(rtw, rth, {
+          minFilter: THREE.LinearFilter,
+          magFilter: THREE.LinearFilter,
+          format: THREE.RGBAFormat,
+          type: THREE.UnsignedByteType,
+          colorSpace: THREE.SRGBColorSpace,
+        });
+      } else if (this.sceneRenderTarget.width !== rtw || this.sceneRenderTarget.height !== rth) {
+        this.sceneRenderTarget.setSize(rtw, rth);
+      }
+    } else {
+      if (this.sceneRenderTarget) {
+        this.sceneRenderTarget.dispose();
+        this.sceneRenderTarget = null;
+      }
+    }
   }
 
   private observeResize() {
@@ -310,6 +411,16 @@ export class ThreeApp {
     this.renderer.setAnimationLoop(null);
     this.resizeObs?.disconnect();
     this.markerPicking.dispose();
+
+    if (this.sceneRenderTarget) {
+      this.sceneRenderTarget.dispose();
+      this.sceneRenderTarget = null;
+    }
+    if (this.blitQuad) {
+      this.blitQuad.geometry.dispose();
+      (this.blitQuad.material as THREE.Material).dispose();
+      this.blitQuad = null;
+    }
 
     // Dispose controls
     this.controls.dispose();
