@@ -1,6 +1,7 @@
-import { CSSProperties, FormEvent, Fragment, useEffect, useState } from "react";
+import { CSSProperties, ChangeEvent, FormEvent, Fragment, useEffect, useRef, useState } from "react";
 import { fetchAuthSession, signInWithRedirect, signOut } from "aws-amplify/auth";
 import { CreateFieldPayload, createField, deleteField, listFields, updateField } from "./adminApi";
+import { parseAndNormalizeEntryFromJson } from "./importJsonToForm";
 
 type FieldItem = {
   FieldID: string;
@@ -16,7 +17,7 @@ type FieldItem = {
 
 type AuthState = "checking" | "authed";
 
-type MarkerForm = {
+export type MarkerForm = {
   icon: string;
   scale: string;
   posX: string;
@@ -27,7 +28,7 @@ type MarkerForm = {
 
 type MarkerPayload = [string, number, [number, number, number], string];
 
-type FieldForm = {
+export type FieldForm = {
   FieldID: string;
   Name: string;
   Description: string;
@@ -38,6 +39,8 @@ type FieldForm = {
   ThumbnailAlt: string;
   markers: MarkerForm[];
 };
+
+type ImportTarget = "create" | "edit";
 
 function createMarker(): MarkerForm {
   return {
@@ -237,6 +240,13 @@ export default function Admin() {
   const [form, setForm] = useState<FieldForm>(() => createEmptyForm());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<FieldForm | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const importTargetRef = useRef<ImportTarget | null>(null);
+  const [importContext, setImportContext] = useState<ImportTarget | null>(null);
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
+  const [importedFilename, setImportedFilename] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
 
   // Auth gate: do not render portal until authenticated
   useEffect(() => {
@@ -291,8 +301,162 @@ export default function Admin() {
     }
   }, [editingId, expanded]);
 
+  function clearImportFeedback(target?: ImportTarget) {
+    if (!target || importContext === target) {
+      setImportContext(null);
+      setImportErrors([]);
+      setImportWarnings([]);
+      setImportedFilename("");
+    }
+  }
+
+  function triggerImport(target: ImportTarget) {
+    importTargetRef.current = target;
+    setImportContext(target);
+    setImportErrors([]);
+    setImportWarnings([]);
+    setImportedFilename("");
+    fileInputRef.current?.click();
+  }
+
+  async function handleImportFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      importTargetRef.current = null;
+      event.target.value = "";
+      return;
+    }
+
+    const target = importTargetRef.current;
+    if (!target) {
+      setImportContext(null);
+      setImportErrors(["Unable to determine where to import the data. Please try again."]);
+      setImportWarnings([]);
+      setImportedFilename("");
+      importTargetRef.current = null;
+      event.target.value = "";
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      const text = await file.text();
+      const result = parseAndNormalizeEntryFromJson(text);
+      if (!result.value || result.errors.length) {
+        setImportErrors(result.errors.length ? result.errors : ["Unable to read a field entry from this file."]);
+        setImportWarnings(result.warnings);
+        setImportedFilename("");
+        return;
+      }
+
+      let normalized = result.value;
+      if (!normalized.markers.length) {
+        normalized = { ...normalized, markers: [createMarker()] };
+      }
+
+      const nextWarnings = [...result.warnings];
+
+      if (target === "edit") {
+        if (!editForm || !editingId) {
+          setImportErrors(["Select an entry to edit before importing."]);
+          setImportWarnings(nextWarnings);
+          setImportedFilename("");
+          return;
+        }
+        if (editingId !== normalized.FieldID) {
+          setImportErrors([
+            `Imported FieldID "${normalized.FieldID}" does not match the entry currently being edited (${editingId}).`,
+          ]);
+          setImportWarnings(nextWarnings);
+          setImportedFilename("");
+          return;
+        }
+        setEditForm(normalized);
+      } else {
+        setForm(normalized);
+        if (items.some((item) => item.FieldID === normalized.FieldID)) {
+          nextWarnings.push(`FieldID "${normalized.FieldID}" might already exist. Verify before saving.`);
+        }
+      }
+
+      setImportErrors([]);
+      setImportWarnings(nextWarnings);
+      setImportedFilename(file.name);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setImportErrors([`Failed to import file: ${message}`]);
+      setImportWarnings([]);
+      setImportedFilename("");
+    } finally {
+      setIsImporting(false);
+      event.target.value = "";
+      importTargetRef.current = null;
+    }
+  }
+
+  function renderImportFeedback(target: ImportTarget) {
+    if (importContext !== target) return null;
+    return (
+      <>
+        {importedFilename && !importErrors.length && (
+          <div
+            style={{
+              border: "1px solid #1d6b3d",
+              background: "#0d2d19",
+              color: "#d3f7df",
+              padding: "8px 12px",
+              borderRadius: 6,
+              marginBottom: 12,
+            }}
+          >
+            Imported from {importedFilename}
+          </div>
+        )}
+        {importWarnings.length > 0 && (
+          <div
+            style={{
+              border: "1px solid #8a6b1d",
+              background: "#352a10",
+              color: "#f6e0a7",
+              padding: "8px 12px",
+              borderRadius: 6,
+              marginBottom: 12,
+            }}
+          >
+            <strong>Warnings:</strong>
+            <ul style={{ margin: "4px 0 0 20px" }}>
+              {importWarnings.map((warning, idx) => (
+                <li key={`${target}-warning-${idx}`}>{warning}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {importErrors.length > 0 && (
+          <div
+            style={{
+              border: "1px solid #a23a3a",
+              background: "#3c1616",
+              color: "#ffd7d7",
+              padding: "8px 12px",
+              borderRadius: 6,
+              marginBottom: 12,
+            }}
+          >
+            <strong>Import failed:</strong>
+            <ul style={{ margin: "4px 0 0 20px" }}>
+              {importErrors.map((error, idx) => (
+                <li key={`${target}-error-${idx}`}>{error}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </>
+    );
+  }
+
   function resetForm() {
     setForm(createEmptyForm());
+    clearImportFeedback("create");
   }
 
   function addMarker() {
@@ -315,6 +479,7 @@ export default function Admin() {
 
   function startEditing(item: FieldItem) {
     setErr("");
+    clearImportFeedback("edit");
     setEditingId(item.FieldID);
     setEditForm(createFormFromItem(item));
   }
@@ -323,6 +488,7 @@ export default function Admin() {
     setEditingId(null);
     setEditForm(null);
     setErr("");
+    clearImportFeedback("edit");
   }
 
   function addEditMarker() {
@@ -433,7 +599,15 @@ export default function Admin() {
 
   // Authenticated portal
   return (
-    <div style={{ padding: 24 }}>
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json,application/json"
+        style={{ display: "none" }}
+        onChange={handleImportFile}
+      />
+      <div style={{ padding: 24 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1>Admin</h1>
         <button onClick={onLogout}>Log out</button>
@@ -542,6 +716,14 @@ export default function Admin() {
                               <button
                                 type="button"
                                 style={rowActionButtonStyle}
+                                onClick={() => triggerImport("edit")}
+                                disabled={busy || isImporting}
+                              >
+                                {isImporting && importContext === "edit" ? "Importing..." : "Import from JSON"}
+                              </button>
+                              <button
+                                type="button"
+                                style={rowActionButtonStyle}
                                 onClick={() => onSaveEdit(it.FieldID)}
                                 disabled={busy}
                               >
@@ -558,10 +740,11 @@ export default function Admin() {
                               Modify Entry
                             </button>
                           )}
-                        </div>
                       </div>
-                      {currentEditForm ? (
+                    </div>
+                    {currentEditForm ? (
                         <>
+                          {renderImportFeedback("edit")}
                           <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
                             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                               <strong>Field ID</strong>
@@ -841,6 +1024,7 @@ export default function Admin() {
             }}
           >
             <h2 style={{ marginTop: 0 }}>Add Entry</h2>
+            {renderImportFeedback("create")}
             <form onSubmit={onAdd} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <input
                 placeholder="FieldID (pk)"
@@ -981,8 +1165,23 @@ export default function Admin() {
                   </div>
                 ))}
               </div>
-              <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end", gap: 8 }}>
-                <button type="button" style={modalButtonStyle} onClick={() => setIsModalOpen(false)}>
+              <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  style={modalButtonStyle}
+                  onClick={() => triggerImport("create")}
+                  disabled={isImporting}
+                >
+                  {isImporting && importContext === "create" ? "Importing..." : "Import from JSON"}
+                </button>
+                <button
+                  type="button"
+                  style={modalButtonStyle}
+                  onClick={() => {
+                    clearImportFeedback("create");
+                    setIsModalOpen(false);
+                  }}
+                >
                   Cancel
                 </button>
                 <button type="submit" style={modalButtonStyle} disabled={busy || !form.FieldID.trim() || !form.Name.trim()}>
@@ -996,5 +1195,6 @@ export default function Admin() {
 
       {busy && <p>Loading…</p>}
     </div>
+    </>
   );
 }
