@@ -59,7 +59,6 @@ export default function App() {
           </button>
         </div>
         <h1 className="appTitle">Virtual Soils</h1>
-        <div className="headerSpacer" aria-hidden />
       </header>
 
       <main className="tabContent">
