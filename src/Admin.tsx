@@ -1,6 +1,6 @@
-import { CSSProperties, FormEvent, Fragment, useEffect, useState } from "react";
+import { type CSSProperties, type FormEvent, Fragment, useEffect, useState } from "react";
 import { fetchAuthSession, signInWithRedirect, signOut } from "aws-amplify/auth";
-import { CreateFieldPayload, createField, deleteField, listFields, updateField } from "./adminApi";
+import { type CreateFieldPayload, createField, deleteField, listFields, updateField } from "./adminApi";
 
 type FieldItem = {
   FieldID: string;

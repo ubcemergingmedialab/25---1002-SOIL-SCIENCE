@@ -1,12 +1,24 @@
 import { useEffect, useRef, useState } from "react";
-import { loadGoogleMaps } from "./lib/loadGoogleMaps";
+import L from "leaflet";
 import { awsClient } from "./lib/awsClient";
 import Viewer from "./Viewer";
+
+/* Fix default marker icon with bundlers (Leaflet expects images at root) */
+import markerIconUrl from "leaflet/dist/images/marker-icon.png";
+import markerShadowUrl from "leaflet/dist/images/marker-shadow.png";
+
+L.Marker.prototype.options.icon = L.icon({
+  iconUrl: markerIconUrl,
+  shadowUrl: markerShadowUrl,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+});
 
 type Pin = {
   title: string;
   position: { lat: number; lng: number };
-  path: string; // gaussian path (local url or cloud link)
+  path: string;
   description: string;
   thumbnail: string;
   thumbnailAlt: string;
@@ -15,6 +27,131 @@ type Pin = {
 
 const placeholderImage =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='240' viewBox='0 0 320 240'%3E%3Crect width='320' height='240' fill='%23202634'/%3E%3Ctext x='160' y='120' fill='%23a9b4c6' font-family='Arial' font-size='18' text-anchor='middle' dominant-baseline='middle'%3ENo image%3C/text%3E%3C/svg%3E";
+
+const UBC_CENTER: L.LatLngTuple = [49.2606, -123.246];
+
+function buildPopupContent(
+  pin: Pin,
+  onOpenViewer: () => void,
+  onClosePopup: () => void
+): HTMLDivElement {
+  const content = document.createElement("div");
+  content.className = "info-window-content";
+  content.style.fontFamily = "system-ui, -apple-system, sans-serif";
+  content.style.minWidth = "380px";
+  content.style.maxWidth = "480px";
+  content.style.overflow = "hidden";
+  content.style.background = "#d4d4d8";
+  content.style.borderRadius = "8px";
+  content.style.border = "1px solid rgba(0, 0, 0, 0.12)";
+  content.style.boxShadow = "0 12px 30px rgba(0, 0, 0, 0.2)";
+
+  const card = document.createElement("div");
+  card.style.display = "flex";
+  card.style.flexDirection = "column";
+  card.style.gap = "0";
+
+  const imgWrap = document.createElement("div");
+  imgWrap.style.width = "100%";
+  imgWrap.style.height = "180px";
+  imgWrap.style.overflow = "hidden";
+  imgWrap.style.position = "relative";
+
+  const img = document.createElement("img");
+  img.src = pin.thumbnail || placeholderImage;
+  img.alt = pin.thumbnailAlt || `${pin.title || "Field"} preview`;
+  img.style.display = "block";
+  img.style.width = "100%";
+  img.style.height = "100%";
+  img.style.objectFit = "cover";
+  img.loading = "lazy";
+  imgWrap.appendChild(img);
+
+  const body = document.createElement("div");
+  body.style.padding = "1.25rem 1.5rem 1.5rem";
+  body.style.display = "flex";
+  body.style.flexDirection = "column";
+  body.style.gap = "0.75rem";
+
+  const title = document.createElement("h3");
+  title.textContent = pin.title || "Untitled field";
+  title.style.margin = "0";
+  title.style.fontSize = "1.25rem";
+  title.style.color = "#222222";
+  title.style.lineHeight = "1.3";
+  title.style.fontWeight = "600";
+
+  const coords = document.createElement("div");
+  coords.style.fontSize = "0.85rem";
+  coords.style.color = "#505050";
+  coords.style.display = "flex";
+  coords.style.gap = "1rem";
+  coords.innerHTML = `
+    <span><strong style="color:#2f2f2f">Lat:</strong> ${pin.position.lat.toFixed(5)}</span>
+    <span><strong style="color:#2f2f2f">Lng:</strong> ${pin.position.lng.toFixed(5)}</span>
+  `;
+
+  const desc = document.createElement("p");
+  desc.className = "info-window-desc";
+  desc.textContent = pin.description?.trim()
+    ? pin.description.trim()
+    : "No description available yet.";
+  desc.style.margin = "0";
+  desc.style.fontSize = "0.9rem";
+  desc.style.color = "#3a3a3a";
+  desc.style.lineHeight = "1.6";
+  desc.style.whiteSpace = "pre-wrap";
+  desc.style.maxHeight = "6rem";
+  desc.style.overflowY = "auto";
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = "Open 3D Viewer";
+  button.style.marginTop = "0.5rem";
+  button.style.width = "100%";
+  button.style.padding = "0.75rem 1.25rem";
+  button.style.borderRadius = "6px";
+  button.style.border = "none";
+  button.style.cursor = "pointer";
+  button.style.background = "#9fb57a";
+  button.style.color = "#1d2514";
+  button.style.fontSize = "0.95rem";
+  button.style.fontWeight = "600";
+  button.style.transition = "transform 0.15s, box-shadow 0.15s";
+  button.style.boxShadow = "0 4px 10px rgba(0, 0, 0, 0.2)";
+  if (!pin.path) {
+    button.style.opacity = "0.5";
+    button.style.cursor = "not-allowed";
+    button.style.background = "#b7b7bb";
+    button.style.boxShadow = "none";
+    button.disabled = true;
+  }
+  button.onmouseenter = () => {
+    if (pin.path) {
+      button.style.transform = "translateY(-1px)";
+      button.style.boxShadow = "0 6px 14px rgba(0, 0, 0, 0.25)";
+    }
+  };
+  button.onmouseleave = () => {
+    button.style.transform = "translateY(0)";
+    button.style.boxShadow = "0 4px 10px rgba(0, 0, 0, 0.2)";
+  };
+  button.addEventListener("click", () => {
+    if (pin.path) {
+      onClosePopup();
+      onOpenViewer();
+    }
+  });
+
+  body.appendChild(title);
+  body.appendChild(coords);
+  body.appendChild(desc);
+  body.appendChild(button);
+  card.appendChild(imgWrap);
+  card.appendChild(body);
+  content.appendChild(card);
+  return content;
+}
 
 export default function UBCMap({
   openViewer,
@@ -34,26 +171,18 @@ export default function UBCMap({
   onCloseViewer: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<google.maps.Marker[]>([]);
-  const infoWindowRef = useRef<google.maps.InfoWindow | null>(null);
-  const pinToMarkerRef = useRef<Map<number, google.maps.Marker>>(new Map());
+  const mapRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<L.Marker[]>([]);
+  const pinToMarkerRef = useRef<Map<number, L.Marker>>(new Map());
   const [pins, setPins] = useState<Pin[]>([]);
   const [selectedPinIndex, setSelectedPinIndex] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  //
-  // -------------------------------------------------------------------
-  // FETCH PINS (NOW AWS SIGNED REQUEST)
-  // -------------------------------------------------------------------
-  //
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       try {
-        console.log("Fetching pins..."); // debug
-
         const res = await awsClient.fetch(
           `${import.meta.env.VITE_API_URL}/pins`,
           { method: "GET" }
@@ -85,14 +214,6 @@ export default function UBCMap({
             markers: p.markers ?? [],
           }));
 
-        console.log(
-          "Pins loaded successfully",
-          nextPins.map((pin) => ({
-            title: pin.title,
-            markers: pin.markers ?? [],
-          }))
-        ); // debug
-
         setPins(nextPins);
       } catch (err) {
         if (!cancelled) console.error("Failed to load pins", err);
@@ -104,253 +225,103 @@ export default function UBCMap({
     };
   }, []);
 
-  //
-  // -------------------------------------------------------------------
-  // MAP + MARKERS (unchanged)
-  // -------------------------------------------------------------------
-  //
   useEffect(() => {
-    if (!mapLoaded) return;
+    if (!mapLoaded || !containerRef.current) return;
 
-    let cancelled = false;
+    const container = containerRef.current;
+    const map = L.map(container, {
+      center: UBC_CENTER,
+      zoom: 13,
+      zoomControl: false,
+    });
 
-    (async () => {
-      await loadGoogleMaps();
-      if (cancelled || !containerRef.current) return;
+    L.control.zoom({ position: "topright" }).addTo(map);
 
-      if (!mapRef.current) {
-        mapRef.current = new google.maps.Map(containerRef.current, {
-          center: { lat: 49.2606, lng: -123.2460 },
-          zoom: 13,
-          mapTypeId: "terrain",
-          streetViewControl: false,
-          fullscreenControl: true,
-        });
-      }
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(map);
 
-      // Cleanup previous markers
-      markersRef.current.forEach((m) => m.setMap(null));
-      markersRef.current = [];
-      pinToMarkerRef.current.clear();
+    mapRef.current = map;
 
-      pins.forEach((pin, index) => {
-        const marker = new google.maps.Marker({
-          position: pin.position,
-          map: mapRef.current!,
-          title: pin.title,
-        });
+    markersRef.current.forEach((m) => map.removeLayer(m));
+    markersRef.current = [];
+    pinToMarkerRef.current.clear();
 
-        pinToMarkerRef.current.set(index, marker);
+    pins.forEach((pin, index) => {
+      const marker = L.marker([pin.position.lat, pin.position.lng])
+        .addTo(map)
+        .on("click", () => setSelectedPinIndex(index));
 
-        const handleClick = () => {
-          setSelectedPinIndex(index);
-          if (infoWindowRef.current) {
-            infoWindowRef.current.close();
-            infoWindowRef.current = null;
-          }
+      const content = buildPopupContent(
+        pin,
+        () => openViewer(pin.path, pin.markers),
+        () => marker.closePopup()
+      );
 
-          const content = document.createElement("div");
-          content.className = "info-window-content";
-          content.style.fontFamily = "system-ui, -apple-system, sans-serif";
-          content.style.minWidth = "380px";
-          content.style.maxWidth = "480px";
-          content.style.overflow = "hidden";
-          content.style.background = "#d4d4d8";
-          content.style.borderRadius = "8px";
-          content.style.border = "1px solid rgba(0, 0, 0, 0.12)";
-          content.style.boxShadow = "0 12px 30px rgba(0, 0, 0, 0.2)";
+      marker.bindPopup(content, { maxWidth: 480, minWidth: 380 });
 
-          const card = document.createElement("div");
-          card.style.display = "flex";
-          card.style.flexDirection = "column";
-          card.style.gap = "0";
+      pinToMarkerRef.current.set(index, marker);
+      markersRef.current.push(marker);
+    });
 
-          // Image section at top
-          const imgWrap = document.createElement("div");
-          imgWrap.style.width = "100%";
-          imgWrap.style.height = "180px";
-          imgWrap.style.overflow = "hidden";
-          imgWrap.style.position = "relative";
+    /* Re-measure after layout so Leaflet gets correct container size (no layout CSS changed) */
+    const rafId = requestAnimationFrame(() => {
+      map.invalidateSize();
+    });
 
-          const img = document.createElement("img");
-          img.src = pin.thumbnail || placeholderImage;
-          img.alt = pin.thumbnailAlt || `${pin.title || "Field"} preview`;
-          img.style.display = "block";
-          img.style.width = "100%";
-          img.style.height = "100%";
-          img.style.objectFit = "cover";
-          img.loading = "lazy";
-
-          imgWrap.appendChild(img);
-
-          // Content body
-          const body = document.createElement("div");
-          body.style.padding = "1.25rem 1.5rem 1.5rem";
-          body.style.display = "flex";
-          body.style.flexDirection = "column";
-          body.style.gap = "0.75rem";
-
-          const title = document.createElement("h3");
-          title.textContent = pin.title || "Untitled field";
-          title.style.margin = "0";
-          title.style.fontSize = "1.25rem";
-          title.style.color = "#222222";
-          title.style.lineHeight = "1.3";
-          title.style.fontWeight = "600";
-
-          const coords = document.createElement("div");
-          coords.style.fontSize = "0.85rem";
-          coords.style.color = "#505050";
-          coords.style.display = "flex";
-          coords.style.gap = "1rem";
-          coords.innerHTML = `
-            <span><strong style="color:#2f2f2f">Lat:</strong> ${pin.position.lat.toFixed(5)}</span>
-            <span><strong style="color:#2f2f2f">Lng:</strong> ${pin.position.lng.toFixed(5)}</span>
-          `;
-
-          const desc = document.createElement("p");
-          desc.className = "info-window-desc";
-          desc.textContent = pin.description?.trim()
-            ? pin.description.trim()
-            : "No description available yet.";
-          desc.style.margin = "0";
-          desc.style.fontSize = "0.9rem";
-          desc.style.color = "#3a3a3a";
-          desc.style.lineHeight = "1.6";
-          desc.style.whiteSpace = "pre-wrap";
-          desc.style.maxHeight = "6rem";
-          desc.style.overflowY = "auto";
-
-          const button = document.createElement("button");
-          button.id = "open-gaussian-btn";
-          button.textContent = "Open 3D Viewer";
-          button.style.marginTop = "0.5rem";
-          button.style.width = "100%";
-          button.style.padding = "0.75rem 1.25rem";
-          button.style.borderRadius = "6px";
-          button.style.border = "none";
-          button.style.cursor = "pointer";
-          button.style.background = "#9fb57a";
-          button.style.color = "#1d2514";
-          button.style.fontSize = "0.95rem";
-          button.style.fontWeight = "600";
-          button.style.transition = "transform 0.15s, box-shadow 0.15s";
-          button.style.boxShadow = "0 4px 10px rgba(0, 0, 0, 0.2)";
-          if (!pin.path) {
-            button.style.opacity = "0.5";
-            button.style.cursor = "not-allowed";
-            button.style.background = "#b7b7bb";
-            button.style.boxShadow = "none";
-            button.disabled = true;
-          }
-          button.onmouseenter = () => {
-            if (pin.path) {
-              button.style.transform = "translateY(-1px)";
-              button.style.boxShadow = "0 6px 14px rgba(0, 0, 0, 0.25)";
-            }
-          };
-          button.onmouseleave = () => {
-            button.style.transform = "translateY(0)";
-            button.style.boxShadow = "0 4px 10px rgba(0, 0, 0, 0.2)";
-          };
-
-          body.appendChild(title);
-          body.appendChild(coords);
-          body.appendChild(desc);
-          body.appendChild(button);
-
-          card.appendChild(imgWrap);
-          card.appendChild(body);
-          content.appendChild(card);
-
-          const infoWindow = new google.maps.InfoWindow({
-            content,
-            maxWidth: 480,
-            disableAutoPan: true,
-          });
-
-          infoWindow.open({
-            map: mapRef.current!,
-            anchor: marker,
-            shouldFocus: false,
-          });
-
-          button.addEventListener("click", () => {
-            if (pin.path) {
-              if (infoWindowRef.current) {
-                infoWindowRef.current.close();
-                infoWindowRef.current = null;
-              }
-              openViewer(pin.path, pin.markers);
-            }
-          });
-
-          infoWindowRef.current = infoWindow;
-        };
-
-        marker.addListener("click", handleClick);
-        markersRef.current.push(marker);
-      });
-    })();
+    /* ResizeObserver: when map pane resizes (e.g. sidebar toggle), tell Leaflet to re-measure */
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    resizeObserver.observe(container);
 
     return () => {
-      cancelled = true;
-      markersRef.current.forEach((m) => m.setMap(null));
+      cancelAnimationFrame(rafId);
+      resizeObserver.disconnect();
+      markersRef.current.forEach((m) => {
+        if (mapRef.current) mapRef.current.removeLayer(m);
+      });
       markersRef.current = [];
-      if (infoWindowRef.current) {
-        infoWindowRef.current.close();
-        infoWindowRef.current = null;
-      }
+      pinToMarkerRef.current.clear();
+      map.remove();
       mapRef.current = null;
     };
-  }, [pins, mapLoaded]);
+  }, [pins, mapLoaded, openViewer]);
 
-  // Helper to pan with the pin in the lower portion of the viewport (leaving room for InfoWindow)
-  const panToWithOffset = (map: google.maps.Map, position: google.maps.LatLng) => {
+  const panToWithOffset = (map: L.Map, latLng: L.LatLng) => {
     const bounds = map.getBounds();
     if (!bounds) {
-      map.panTo(position);
+      map.panTo(latLng);
       return;
     }
-    // Calculate the vertical span and offset the center so pin is in lower 1/3 of viewport
-    const ne = bounds.getNorthEast();
-    const sw = bounds.getSouthWest();
-    const latSpan = ne.lat() - sw.lat();
-    // Offset center northward so pin appears lower
-    const offsetLat = position.lat() + latSpan * 0.25;
-    map.panTo({ lat: offsetLat, lng: position.lng() });
+    const north = bounds.getNorth();
+    const south = bounds.getSouth();
+    const latSpan = north - south;
+    const offsetLat = latLng.lat + latSpan * 0.25;
+    map.panTo([offsetLat, latLng.lng]);
+  };
+
+  const runPanZoomAndOpenPopup = (map: L.Map, marker: L.Marker) => {
+    const latLng = marker.getLatLng();
+    map.setZoom(15);
+    map.once("moveend", () => {
+      panToWithOffset(map, latLng);
+      map.once("moveend", () => marker.openPopup());
+    });
   };
 
   const handlePinMenuClick = (index: number) => {
     setSelectedPinIndex(index);
-    
-    // If map isn't loaded, load it first
+
     if (!mapLoaded) {
       setMapLoaded(true);
-      // Wait for map and markers to be ready
       const checkAndClick = () => {
         const marker = pinToMarkerRef.current.get(index);
-        if (marker && mapRef.current) {
-          const position = marker.getPosition()!;
-          // First pan to the marker area
-          mapRef.current.panTo(position);
-          // Wait for pan to complete, then zoom and trigger click
-          google.maps.event.addListenerOnce(
-            mapRef.current,
-            "idle",
-            () => {
-              mapRef.current!.setZoom(15);
-              // Wait for zoom to complete, then offset pan and trigger click
-              google.maps.event.addListenerOnce(mapRef.current!, "idle", () => {
-                panToWithOffset(mapRef.current!, position);
-                google.maps.event.addListenerOnce(mapRef.current!, "idle", () => {
-                  google.maps.event.trigger(marker, "click");
-                });
-              });
-            }
-          );
+        const map = mapRef.current;
+        if (marker && map) {
+          map.panTo(marker.getLatLng());
+          map.once("moveend", () => runPanZoomAndOpenPopup(map, marker));
         } else {
-          // Retry after a short delay if markers aren't ready yet
           setTimeout(checkAndClick, 100);
         }
       };
@@ -359,17 +330,9 @@ export default function UBCMap({
     }
 
     const marker = pinToMarkerRef.current.get(index);
-    if (marker && mapRef.current) {
-      const position = marker.getPosition()!;
-      // First zoom, then offset pan
-      mapRef.current.setZoom(15);
-      google.maps.event.addListenerOnce(mapRef.current, "idle", () => {
-        panToWithOffset(mapRef.current!, position);
-        // Wait for offset pan to complete, then trigger click
-        google.maps.event.addListenerOnce(mapRef.current!, "idle", () => {
-          google.maps.event.trigger(marker, "click");
-        });
-      });
+    const map = mapRef.current;
+    if (marker && map) {
+      runPanZoomAndOpenPopup(map, marker);
     }
   };
 
@@ -424,13 +387,7 @@ export default function UBCMap({
       </aside>
 
       <div className="mapPane">
-        <div ref={containerRef} className="mapFrame" />
-        {!mapLoaded && (
-          <div onClick={() => setMapLoaded(true)} className="mapLoadPrompt">
-            Click to load map
-          </div>
-        )}
-        {activeViewer && (
+         {activeViewer && (
           <div className="embeddedViewerOverlay">
             <Viewer
               gaussianPath={activeViewer.path}
@@ -440,6 +397,13 @@ export default function UBCMap({
             />
           </div>
         )}
+        <div ref={containerRef} className="mapFrame" />
+        {!mapLoaded && (
+          <div onClick={() => setMapLoaded(true)} className="mapLoadPrompt">
+            Click to load map
+          </div>
+        )}
+       
       </div>
     </section>
   );
