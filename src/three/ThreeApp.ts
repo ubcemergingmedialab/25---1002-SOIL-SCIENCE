@@ -1,7 +1,8 @@
 // ThreeApp.ts
 import * as THREE from "three";
 import { FlyControls } from "./FlyControls";
-import type { PerformanceSettings } from "./ScreenSpace";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import type { ControlMode, PerformanceSettings } from "./ScreenSpace";
 import { ScreenSpaceUI, PERFORMANCE_PRESETS } from "./ScreenSpace";
 import { GaussianViewer } from "./GaussianViewer";
 import { WorldMarkers } from "./WorldMarkers";
@@ -39,7 +40,11 @@ export class ThreeApp {
   private prevH = 0;
 
   // Systems
-  private controls!: FlyControls;
+  private flyControls: FlyControls | null = null;
+  private orbitControls: OrbitControls | null = null;
+  private controlMode: ControlMode = "fly";
+  private readonly defaultControlMode: ControlMode = "orbit";
+  private flySpeed = 0.5;
   private screenUI!: ScreenSpaceUI;
   private gaussian!: GaussianViewer;
   private skybox!: Skybox;
@@ -130,10 +135,16 @@ export class ThreeApp {
   }
 
   private initControls() {
-    this.controls = new FlyControls(this.camera, this.renderer.domElement);
+    this.flyControls = new FlyControls(this.camera, this.renderer.domElement);
     this.setPlayAreaBounds(DEFAULT_PLAY_AREA_BOUNDS);
-    this.screenUI.setSpeedChangeHandler((v) => this.controls.setFlySpeed(v));
-    this.screenUI.setSpeed(this.controls.getFlySpeed());
+    this.screenUI.setSpeedChangeHandler((v) => {
+      this.flySpeed = v;
+      this.flyControls?.setFlySpeed(v);
+    });
+    this.flyControls.setFlySpeed(this.flySpeed);
+    this.screenUI.setSpeed(this.flySpeed);
+    this.screenUI.setControlModeChangeHandler((mode) => this.setControlMode(mode));
+    this.setControlMode(this.defaultControlMode);
     
     // Performance preset handler
     this.screenUI.setPerformanceChangeHandler((settings) => {
@@ -184,7 +195,11 @@ export class ThreeApp {
   }
 
   private update(dt: number) {
-    this.controls.update(dt);
+    if (this.controlMode === "fly") {
+      this.flyControls?.update(dt);
+    } else {
+      this.orbitControls?.update();
+    }
     this.gaussian.update();
     this.screenUI.setPlayerWorldPosition(this.camera.position);
     this.screenUI.setFps(this.fps);
@@ -248,6 +263,10 @@ export class ThreeApp {
       await this.gaussian.loadScene(path);
       if (!this.destroyed) {
         this.camera.position.set(0, 2.5, 5);
+        if (this.orbitControls) {
+          this.orbitControls.target.set(0, 0, 0);
+          this.orbitControls.update();
+        }
       }
     } finally {
       if (!this.destroyed) this.overlay.hide();
@@ -295,7 +314,7 @@ export class ThreeApp {
 
   public setPlayAreaBounds(bounds: THREE.Box3 | null | undefined) {
     this.playAreaBounds = bounds ? bounds.clone() : null;
-    this.controls.setBounds(this.playAreaBounds);
+    this.flyControls?.setBounds(this.playAreaBounds);
   }
 
   // -------------------------------------------------------------------------
@@ -423,7 +442,8 @@ export class ThreeApp {
     }
 
     // Dispose controls
-    this.controls.dispose();
+    this.flyControls?.dispose();
+    this.orbitControls?.dispose();
 
     if (this.worldAxes) {
       this.worldAxes.geometry.dispose();
@@ -444,5 +464,38 @@ export class ThreeApp {
     if (this.renderer.domElement.parentElement === this.container) {
       this.container.removeChild(this.renderer.domElement);
     }
+  }
+
+  private setControlMode(mode: ControlMode) {
+    if (mode === this.controlMode) return;
+    this.controlMode = mode;
+    this.screenUI.setControlMode(mode);
+
+    if (mode === "orbit") {
+      this.flyControls?.dispose();
+      this.flyControls = null;
+
+      this.orbitControls = new OrbitControls(this.camera, this.renderer.domElement);
+      this.orbitControls.enableDamping = true;
+      this.orbitControls.dampingFactor = 0.08;
+      this.orbitControls.zoomSpeed = 0.9;
+      this.orbitControls.panSpeed = 0.8;
+      this.orbitControls.rotateSpeed = 0.9;
+
+      this.orbitControls.target.set(0, 0, 0);
+      this.orbitControls.update();
+      this.screenUI.setSpeedControlEnabled(false);
+      this.renderer.domElement.style.cursor = "grab";
+      return;
+    }
+
+    this.orbitControls?.dispose();
+    this.orbitControls = null;
+
+    this.flyControls = new FlyControls(this.camera, this.renderer.domElement);
+    this.flyControls.setFlySpeed(this.flySpeed);
+    this.flyControls.setBounds(this.playAreaBounds);
+    this.screenUI.setSpeed(this.flySpeed);
+    this.screenUI.setSpeedControlEnabled(true);
   }
 }

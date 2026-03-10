@@ -2,6 +2,7 @@
 import * as THREE from "three";
 
 export type PerformancePreset = "low" | "medium" | "high";
+export type ControlMode = "fly" | "orbit";
 
 export interface PerformanceSettings {
   preset: PerformancePreset;
@@ -28,8 +29,13 @@ export class ScreenSpaceUI {
   private speedWrap: HTMLDivElement;
   private speedValue: HTMLSpanElement;
   private perfSelect: HTMLSelectElement;
+  private controlsHint: HTMLDivElement;
+  private controlModeWrap: HTMLDivElement;
+  private flyModeBtn: HTMLButtonElement;
+  private orbitModeBtn: HTMLButtonElement;
   private onSpeedChange?: (value: number) => void;
   private onPerformanceChange?: (settings: PerformanceSettings) => void;
+  private onControlModeChange?: (mode: ControlMode) => void;
 
   private playerWorldPos = new THREE.Vector3();
   private fps = 0;
@@ -60,6 +66,37 @@ export class ScreenSpaceUI {
     });
 
     // Performance preset selector
+    this.controlModeWrap = document.createElement("div");
+    Object.assign(this.controlModeWrap.style, {
+      display: "flex",
+      alignItems: "center",
+      gap: "6px",
+      padding: "4px 8px",
+      background: "rgba(0, 0, 0, 0.5)",
+      borderRadius: "4px",
+      pointerEvents: "auto",
+    });
+
+    const modeLabel = document.createElement("span");
+    modeLabel.textContent = "Controls";
+
+    this.flyModeBtn = document.createElement("button");
+    this.flyModeBtn.type = "button";
+    this.flyModeBtn.textContent = "Fly";
+    this.styleModeButton(this.flyModeBtn);
+
+    this.orbitModeBtn = document.createElement("button");
+    this.orbitModeBtn.type = "button";
+    this.orbitModeBtn.textContent = "Orbit";
+    this.styleModeButton(this.orbitModeBtn);
+
+    this.flyModeBtn.addEventListener("click", () => this.onControlModeChange?.("fly"));
+    this.orbitModeBtn.addEventListener("click", () => this.onControlModeChange?.("orbit"));
+
+    this.controlModeWrap.appendChild(modeLabel);
+    this.controlModeWrap.appendChild(this.flyModeBtn);
+    this.controlModeWrap.appendChild(this.orbitModeBtn);
+
     const perfWrap = document.createElement("div");
     Object.assign(perfWrap.style, {
       display: "flex",
@@ -168,11 +205,35 @@ export class ScreenSpaceUI {
     this.speedWrap.appendChild(slider);
     this.speedWrap.appendChild(this.speedValue);
 
+    // Bottom-left controls legend
+    this.controlsHint = document.createElement("div");
+    Object.assign(this.controlsHint.style, {
+      maxWidth: "300px",
+      padding: "8px 10px",
+      background: "rgba(0, 0, 0, 0.55)",
+      borderRadius: "6px",
+      fontSize: "11px",
+      lineHeight: "1.45",
+      color: "#f3f4f6",
+      whiteSpace: "pre-line",
+      marginTop: "2px",
+    });
+    this.controlsHint.textContent =
+      "Controls\n" +
+      "LMB drag: look around\n" +
+      "W A S D: move\n" +
+      "Q / E or Space / Shift: down / up\n" +
+      "Mouse wheel: forward / back";
+
+    this.root.appendChild(this.controlModeWrap);
     this.root.appendChild(perfWrap);
     this.root.appendChild(this.positionLabel);
     this.root.appendChild(this.fpsLabel);
     this.root.appendChild(this.speedWrap);
+    this.root.appendChild(this.controlsHint);
     this.container.appendChild(this.root);
+
+    this.setControlMode("orbit");
   }
 
   /**
@@ -200,6 +261,40 @@ export class ScreenSpaceUI {
     this.onPerformanceChange = fn;
   }
 
+  public setControlModeChangeHandler(fn: (mode: ControlMode) => void) {
+    this.onControlModeChange = fn;
+  }
+
+  public setControlMode(mode: ControlMode) {
+    const activeStyle = {
+      background: "rgba(255, 255, 255, 0.3)",
+      borderColor: "rgba(255, 255, 255, 0.45)",
+    };
+    const inactiveStyle = {
+      background: "rgba(255, 255, 255, 0.12)",
+      borderColor: "rgba(255, 255, 255, 0.22)",
+    };
+
+    Object.assign(this.flyModeBtn.style, mode === "fly" ? activeStyle : inactiveStyle);
+    Object.assign(this.orbitModeBtn.style, mode === "orbit" ? activeStyle : inactiveStyle);
+    this.controlsHint.textContent =
+      mode === "fly"
+        ? "Controls (Fly)\n" +
+          "LMB drag: look around\n" +
+          "W A S D: move\n" +
+          "Q / E or Space / Shift: down / up\n" +
+          "Mouse wheel: forward / back"
+        : "Controls (Orbit)\n" +
+          "LMB drag: orbit\n" +
+          "RMB drag: pan\n" +
+          "Mouse wheel: zoom";
+  }
+
+  public setSpeedControlEnabled(enabled: boolean) {
+    this.speedWrap.style.opacity = enabled ? "1" : "0.45";
+    this.speedWrap.style.pointerEvents = enabled ? "auto" : "none";
+  }
+
   public setPerformancePreset(preset: PerformancePreset) {
     this.perfSelect.value = preset;
   }
@@ -223,5 +318,18 @@ export class ScreenSpaceUI {
     if (this.root.parentElement === this.container) {
       this.container.removeChild(this.root);
     }
+  }
+
+  private styleModeButton(button: HTMLButtonElement) {
+    Object.assign(button.style, {
+      border: "1px solid rgba(255, 255, 255, 0.22)",
+      background: "rgba(255, 255, 255, 0.12)",
+      color: "#fff",
+      borderRadius: "3px",
+      fontSize: "11px",
+      fontWeight: "600",
+      padding: "2px 7px",
+      cursor: "pointer",
+    });
   }
 }

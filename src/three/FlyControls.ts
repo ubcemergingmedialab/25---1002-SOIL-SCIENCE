@@ -194,8 +194,9 @@ export class FlyControls {
     if (e.code === "KeyS") this.moving.b = true;
     if (e.code === "KeyA") this.moving.l = true;
     if (e.code === "KeyD") this.moving.r = true;
-    if (e.code === "Space") this.moving.u = true;
-    if (e.code === "ShiftLeft" || e.code === "ShiftRight") this.moving.d = true;
+    if (e.code === "Space" || e.code === "KeyE") this.moving.u = true;
+    if (e.code === "ShiftLeft" || e.code === "ShiftRight" || e.code === "KeyQ")
+      this.moving.d = true;
   }
 
   private handleKeyUp(e: KeyboardEvent) {
@@ -204,8 +205,8 @@ export class FlyControls {
     if (e.code === "KeyS") this.moving.b = false;
     if (e.code === "KeyA") this.moving.l = false;
     if (e.code === "KeyD") this.moving.r = false;
-    if (e.code === "Space") this.moving.u = false;
-    if (e.code === "ShiftLeft" || e.code === "ShiftRight")
+    if (e.code === "Space" || e.code === "KeyE") this.moving.u = false;
+    if (e.code === "ShiftLeft" || e.code === "ShiftRight" || e.code === "KeyQ")
       this.moving.d = false;
   }
 }
