@@ -127,6 +127,10 @@ export class ThreeApp {
   private initUI() {
     this.screenUI = new ScreenSpaceUI(this.container);
     this.overlay = new LoadingOverlay(this.container);
+    this.screenUI.setRuntimeInfo({
+      clientType: this.getClientType(),
+      gpuRenderer: this.getGpuRendererName(),
+    });
   }
 
   private initCamera() {
@@ -259,8 +263,19 @@ export class ThreeApp {
   public async loadGaussianScene(path: string) {
     if (this.destroyed) return;
     this.overlay.show();
+    this.overlay.setHint("Downloading scene data...");
+    this.overlay.setProgress(0);
     try {
-      await this.gaussian.loadScene(path);
+      await this.gaussian.loadScene(path, (progress) => {
+        this.overlay.setProgress(progress);
+        if (progress === null) {
+          this.overlay.setHint("Downloading scene data...");
+        } else if (progress < 1) {
+          this.overlay.setHint(`Downloading scene data... ${Math.round(progress * 100)}%`);
+        } else {
+          this.overlay.setHint("Building virtual soil...");
+        }
+      });
       if (!this.destroyed) {
         this.camera.position.set(0, 2.5, 5);
         if (this.orbitControls) {
@@ -417,8 +432,19 @@ export class ThreeApp {
     // Reload scene if one was loaded
     if (currentPath) {
       this.overlay.show();
+      this.overlay.setHint("Reloading virtual soil...");
+      this.overlay.setProgress(0);
       try {
-        await this.gaussian.loadScene(currentPath);
+        await this.gaussian.loadScene(currentPath, (progress) => {
+          this.overlay.setProgress(progress);
+          if (progress === null) {
+            this.overlay.setHint("Reloading virtual soil...");
+          } else if (progress < 1) {
+            this.overlay.setHint(`Reloading virtual soil... ${Math.round(progress * 100)}%`);
+          } else {
+            this.overlay.setHint("Finalizing scene...");
+          }
+        });
       } finally {
         if (!this.destroyed) this.overlay.hide();
       }
@@ -497,5 +523,22 @@ export class ThreeApp {
     this.flyControls.setBounds(this.playAreaBounds);
     this.screenUI.setSpeed(this.flySpeed);
     this.screenUI.setSpeedControlEnabled(true);
+  }
+
+  private getClientType(): string {
+    const ua = navigator.userAgent || "";
+    const coarsePointer = window.matchMedia?.("(pointer: coarse)")?.matches ?? false;
+    const mobileUa = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+    return mobileUa || coarsePointer ? "Mobile" : "Desktop";
+  }
+
+  private getGpuRendererName(): string {
+    const gl = this.renderer.getContext();
+    const debugInfo = gl.getExtension("WEBGL_debug_renderer_info");
+    if (!debugInfo) return "Unavailable";
+    const rendererName = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+    return typeof rendererName === "string" && rendererName.trim().length > 0
+      ? rendererName
+      : "Unavailable";
   }
 }

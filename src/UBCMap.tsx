@@ -16,6 +16,12 @@ type Pin = {
 const placeholderImage =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='320' height='240' viewBox='0 0 320 240'%3E%3Crect width='320' height='240' fill='%23202634'/%3E%3Ctext x='160' y='120' fill='%23a9b4c6' font-family='Arial' font-size='18' text-anchor='middle' dominant-baseline='middle'%3ENo image%3C/text%3E%3C/svg%3E";
 
+const reducedPoiStyles: google.maps.MapTypeStyle[] = [
+  { featureType: "poi.business", stylers: [{ visibility: "off" }] },
+  { featureType: "poi.attraction", stylers: [{ visibility: "off" }] },
+  { featureType: "transit.station", stylers: [{ visibility: "off" }] },
+];
+
 export default function UBCMap({
   openViewer,
   mapLoaded,
@@ -123,6 +129,7 @@ export default function UBCMap({
           center: { lat: 49.2606, lng: -123.2460 },
           zoom: 13,
           mapTypeId: "terrain",
+          styles: reducedPoiStyles,
           streetViewControl: false,
           fullscreenControl: true,
         });
@@ -152,8 +159,8 @@ export default function UBCMap({
           const content = document.createElement("div");
           content.className = "info-window-content";
           content.style.fontFamily = "system-ui, -apple-system, sans-serif";
-          content.style.minWidth = "380px";
-          content.style.maxWidth = "480px";
+          content.style.minWidth = "520px";
+          content.style.maxWidth = "700px";
           content.style.overflow = "hidden";
           content.style.background = "#d4d4d8";
           content.style.borderRadius = "8px";
@@ -168,7 +175,7 @@ export default function UBCMap({
           // Image section at top
           const imgWrap = document.createElement("div");
           imgWrap.style.width = "100%";
-          imgWrap.style.height = "180px";
+          imgWrap.style.height = "220px";
           imgWrap.style.overflow = "hidden";
           imgWrap.style.position = "relative";
 
@@ -265,7 +272,7 @@ export default function UBCMap({
 
           const infoWindow = new google.maps.InfoWindow({
             content,
-            maxWidth: 480,
+            maxWidth: 700,
             disableAutoPan: true,
           });
 
