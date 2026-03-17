@@ -27,7 +27,6 @@ export default function UBCMap({
   mapLoaded,
   setMapLoaded,
   sidebarCollapsed,
-  setSidebarCollapsed,
   activeViewer,
   onCloseViewer,
 }: {
@@ -35,7 +34,6 @@ export default function UBCMap({
   mapLoaded: boolean;
   setMapLoaded: (loaded: boolean) => void;
   sidebarCollapsed: boolean;
-  setSidebarCollapsed: (collapsed: boolean | ((current: boolean) => boolean)) => void;
   activeViewer: { path: string; markers?: Array<Record<string, unknown>> } | null;
   onCloseViewer: () => void;
 }) {
@@ -47,6 +45,28 @@ export default function UBCMap({
   const [pins, setPins] = useState<Pin[]>([]);
   const [selectedPinIndex, setSelectedPinIndex] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const selectedPin = selectedPinIndex !== null ? pins[selectedPinIndex] : null;
+  const filteredPins = pins
+    .map((pin, index) => ({ pin, index }))
+    .filter(({ pin }) => (pin.title || "").toLowerCase().includes(searchQuery.toLowerCase()));
+
+  const smoothFocusPin = (position: google.maps.LatLngLiteral, targetZoom = 15) => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+    map.panTo(position);
+
+    const stepZoom = () => {
+      const currentZoom = map.getZoom();
+      if (typeof currentZoom !== "number" || currentZoom === targetZoom) return;
+      const nextZoom = currentZoom < targetZoom ? currentZoom + 1 : currentZoom - 1;
+      map.setZoom(nextZoom);
+      if (nextZoom !== targetZoom) {
+        setTimeout(stepZoom, 90);
+      }
+    };
+
+    setTimeout(stepZoom, 180);
+  };
 
   //
   // -------------------------------------------------------------------
@@ -134,6 +154,14 @@ export default function UBCMap({
           fullscreenControl: true,
         });
       }
+      google.maps.event.clearListeners(mapRef.current, "click");
+      mapRef.current.addListener("click", () => {
+        setSelectedPinIndex(null);
+        if (infoWindowRef.current) {
+          infoWindowRef.current.close();
+          infoWindowRef.current = null;
+        }
+      });
 
       // Cleanup previous markers
       markersRef.current.forEach((m) => m.setMap(null));
@@ -146,11 +174,11 @@ export default function UBCMap({
           map: mapRef.current!,
           title: pin.title,
         });
-
         pinToMarkerRef.current.set(index, marker);
 
         const handleClick = () => {
           setSelectedPinIndex(index);
+
           if (infoWindowRef.current) {
             infoWindowRef.current.close();
             infoWindowRef.current = null;
@@ -159,23 +187,22 @@ export default function UBCMap({
           const content = document.createElement("div");
           content.className = "info-window-content";
           content.style.fontFamily = "system-ui, -apple-system, sans-serif";
-          content.style.minWidth = "520px";
-          content.style.maxWidth = "700px";
+          content.style.width = "280px";
+          content.style.maxWidth = "280px";
           content.style.overflow = "hidden";
-          content.style.background = "#d4d4d8";
+          content.style.background = "#ffffff";
           content.style.borderRadius = "8px";
-          content.style.border = "1px solid rgba(0, 0, 0, 0.12)";
-          content.style.boxShadow = "0 12px 30px rgba(0, 0, 0, 0.2)";
+          content.style.border = "1px solid rgba(0, 0, 0, 0.16)";
+          content.style.boxShadow = "0 4px 0 rgba(0, 0, 0, 0.16)";
 
           const card = document.createElement("div");
           card.style.display = "flex";
           card.style.flexDirection = "column";
           card.style.gap = "0";
 
-          // Image section at top
           const imgWrap = document.createElement("div");
           imgWrap.style.width = "100%";
-          imgWrap.style.height = "220px";
+          imgWrap.style.height = "132px";
           imgWrap.style.overflow = "hidden";
           imgWrap.style.position = "relative";
 
@@ -190,80 +217,66 @@ export default function UBCMap({
 
           imgWrap.appendChild(img);
 
-          // Content body
           const body = document.createElement("div");
-          body.style.padding = "1.25rem 1.5rem 1.5rem";
+          body.style.padding = "0.62rem 0.72rem 0.72rem";
           body.style.display = "flex";
           body.style.flexDirection = "column";
-          body.style.gap = "0.75rem";
+          body.style.gap = "0.22rem";
 
           const title = document.createElement("h3");
           title.textContent = pin.title || "Untitled field";
           title.style.margin = "0";
-          title.style.fontSize = "1.25rem";
-          title.style.color = "#222222";
-          title.style.lineHeight = "1.3";
+          title.style.fontSize = "1.42rem";
+          title.style.color = "#121212";
+          title.style.lineHeight = "1.12";
           title.style.fontWeight = "600";
 
           const coords = document.createElement("div");
-          coords.style.fontSize = "0.85rem";
-          coords.style.color = "#505050";
+          coords.style.fontSize = "0.79rem";
+          coords.style.color = "#2f2f2f";
           coords.style.display = "flex";
-          coords.style.gap = "1rem";
+          coords.style.flexDirection = "column";
+          coords.style.gap = "0.07rem";
+          coords.style.lineHeight = "1.3";
           coords.innerHTML = `
-            <span><strong style="color:#2f2f2f">Lat:</strong> ${pin.position.lat.toFixed(5)}</span>
-            <span><strong style="color:#2f2f2f">Lng:</strong> ${pin.position.lng.toFixed(5)}</span>
+            <span><strong style="color:#232323;font-weight:500;">Location:</strong> ${pin.title || "Unknown field"}</span>
+            <span>${pin.position.lat.toFixed(4)}, ${pin.position.lng.toFixed(4)}</span>
           `;
-
-          const desc = document.createElement("p");
-          desc.className = "info-window-desc";
-          desc.textContent = pin.description?.trim()
-            ? pin.description.trim()
-            : "No description available yet.";
-          desc.style.margin = "0";
-          desc.style.fontSize = "0.9rem";
-          desc.style.color = "#3a3a3a";
-          desc.style.lineHeight = "1.6";
-          desc.style.whiteSpace = "pre-wrap";
-          desc.style.maxHeight = "6rem";
-          desc.style.overflowY = "auto";
 
           const button = document.createElement("button");
           button.id = "open-gaussian-btn";
-          button.textContent = "Open 3D Viewer";
-          button.style.marginTop = "0.5rem";
-          button.style.width = "100%";
-          button.style.padding = "0.75rem 1.25rem";
-          button.style.borderRadius = "6px";
+          button.textContent = "→  Enter";
+          button.style.marginTop = "0.38rem";
+          button.style.width = "60%";
+          button.style.alignSelf = "center";
+          button.style.padding = "0.2rem 0.85rem 0.28rem";
+          button.style.borderRadius = "999px";
           button.style.border = "none";
           button.style.cursor = "pointer";
-          button.style.background = "#9fb57a";
-          button.style.color = "#1d2514";
-          button.style.fontSize = "0.95rem";
-          button.style.fontWeight = "600";
-          button.style.transition = "transform 0.15s, box-shadow 0.15s";
-          button.style.boxShadow = "0 4px 10px rgba(0, 0, 0, 0.2)";
+          button.style.background = "#7b9850";
+          button.style.color = "#f3f5ec";
+          button.style.fontSize = "1.65rem";
+          button.style.lineHeight = "1";
+          button.style.fontWeight = "700";
+          button.style.letterSpacing = "0.01em";
+          button.style.transition = "filter 0.15s ease";
           if (!pin.path) {
             button.style.opacity = "0.5";
             button.style.cursor = "not-allowed";
             button.style.background = "#b7b7bb";
-            button.style.boxShadow = "none";
             button.disabled = true;
           }
           button.onmouseenter = () => {
             if (pin.path) {
-              button.style.transform = "translateY(-1px)";
-              button.style.boxShadow = "0 6px 14px rgba(0, 0, 0, 0.25)";
+              button.style.filter = "brightness(0.95)";
             }
           };
           button.onmouseleave = () => {
-            button.style.transform = "translateY(0)";
-            button.style.boxShadow = "0 4px 10px rgba(0, 0, 0, 0.2)";
+            button.style.filter = "none";
           };
 
           body.appendChild(title);
           body.appendChild(coords);
-          body.appendChild(desc);
           body.appendChild(button);
 
           card.appendChild(imgWrap);
@@ -272,7 +285,7 @@ export default function UBCMap({
 
           const infoWindow = new google.maps.InfoWindow({
             content,
-            maxWidth: 700,
+            maxWidth: 320,
             disableAutoPan: true,
           });
 
@@ -284,15 +297,12 @@ export default function UBCMap({
 
           button.addEventListener("click", () => {
             if (pin.path) {
-              if (infoWindowRef.current) {
-                infoWindowRef.current.close();
-                infoWindowRef.current = null;
-              }
               openViewer(pin.path, pin.markers);
             }
           });
 
           infoWindowRef.current = infoWindow;
+          smoothFocusPin(pin.position, 15);
         };
 
         marker.addListener("click", handleClick);
@@ -304,6 +314,7 @@ export default function UBCMap({
       cancelled = true;
       markersRef.current.forEach((m) => m.setMap(null));
       markersRef.current = [];
+      pinToMarkerRef.current.clear();
       if (infoWindowRef.current) {
         infoWindowRef.current.close();
         infoWindowRef.current = null;
@@ -312,119 +323,97 @@ export default function UBCMap({
     };
   }, [pins, mapLoaded]);
 
-  // Helper to pan with the pin in the lower portion of the viewport (leaving room for InfoWindow)
-  const panToWithOffset = (map: google.maps.Map, position: google.maps.LatLng) => {
-    const bounds = map.getBounds();
-    if (!bounds) {
-      map.panTo(position);
-      return;
-    }
-    // Calculate the vertical span and offset the center so pin is in lower 1/3 of viewport
-    const ne = bounds.getNorthEast();
-    const sw = bounds.getSouthWest();
-    const latSpan = ne.lat() - sw.lat();
-    // Offset center northward so pin appears lower
-    const offsetLat = position.lat() + latSpan * 0.25;
-    map.panTo({ lat: offsetLat, lng: position.lng() });
+  const focusPin = (index: number) => {
+    const pin = pins[index];
+    if (!pin) return;
+    smoothFocusPin(pin.position, 15);
   };
 
   const handlePinMenuClick = (index: number) => {
-    setSelectedPinIndex(index);
-    
-    // If map isn't loaded, load it first
+    const triggerMarkerSelection = () => {
+      const marker = pinToMarkerRef.current.get(index);
+      if (!marker) return false;
+      google.maps.event.trigger(marker, "click");
+      return true;
+    };
+
     if (!mapLoaded) {
       setMapLoaded(true);
-      // Wait for map and markers to be ready
-      const checkAndClick = () => {
-        const marker = pinToMarkerRef.current.get(index);
-        if (marker && mapRef.current) {
-          const position = marker.getPosition()!;
-          // First pan to the marker area
-          mapRef.current.panTo(position);
-          // Wait for pan to complete, then zoom and trigger click
-          google.maps.event.addListenerOnce(
-            mapRef.current,
-            "idle",
-            () => {
-              mapRef.current!.setZoom(15);
-              // Wait for zoom to complete, then offset pan and trigger click
-              google.maps.event.addListenerOnce(mapRef.current!, "idle", () => {
-                panToWithOffset(mapRef.current!, position);
-                google.maps.event.addListenerOnce(mapRef.current!, "idle", () => {
-                  google.maps.event.trigger(marker, "click");
-                });
-              });
-            }
-          );
-        } else {
-          // Retry after a short delay if markers aren't ready yet
-          setTimeout(checkAndClick, 100);
-        }
+      let retries = 0;
+      const waitForMarker = () => {
+        if (triggerMarkerSelection()) return;
+        retries += 1;
+        if (retries < 15) setTimeout(waitForMarker, 120);
       };
-      setTimeout(checkAndClick, 500);
+      setTimeout(waitForMarker, 450);
       return;
     }
 
-    const marker = pinToMarkerRef.current.get(index);
-    if (marker && mapRef.current) {
-      const position = marker.getPosition()!;
-      // First zoom, then offset pan
-      mapRef.current.setZoom(15);
-      google.maps.event.addListenerOnce(mapRef.current, "idle", () => {
-        panToWithOffset(mapRef.current!, position);
-        // Wait for offset pan to complete, then trigger click
-        google.maps.event.addListenerOnce(mapRef.current!, "idle", () => {
-          google.maps.event.trigger(marker, "click");
-        });
-      });
+    if (!triggerMarkerSelection()) {
+      setSelectedPinIndex(index);
+      focusPin(index);
     }
   };
 
   return (
     <section className="viewerPane">
-      <aside className={`sidePanel ${sidebarCollapsed ? "collapsed" : ""}`}>
-        <button
-          type="button"
-          className="collapseToggle"
-          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          onClick={() => setSidebarCollapsed((current) => !current)}
-        >
-          {sidebarCollapsed ? ">" : "<"}
-        </button>
-
+      <aside
+        className={`sidePanel mapSidePanel ${selectedPin ? "pinSelected" : ""} ${
+          sidebarCollapsed ? "collapsed" : ""
+        }`}
+      >
         {!sidebarCollapsed && (
           <>
-            <h2 className="sidePanelTitle">Virtual Soil Library</h2>
-            <input
-              type="text"
-              className="locationSearch"
-              placeholder="Search locations..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {pins.length === 0 ? (
-              <div className="sidePanelStatus">Loading locations...</div>
+            {selectedPin ? (
+              <section className="selectedPinCard" aria-live="polite">
+                <div className="selectedPinHero">
+                  <img
+                    className="selectedPinImage"
+                    src={selectedPin.thumbnail || placeholderImage}
+                    alt={selectedPin.thumbnailAlt || `${selectedPin.title || "Field"} preview`}
+                  />
+                </div>
+                <div className="selectedPinBody">
+                  <h2>{selectedPin.title || "Untitled field"}</h2>
+                  <p className="selectedPinMeta">Location: {selectedPin.title || "Unknown field"}</p>
+                  <p className="selectedPinMeta">
+                    {selectedPin.position.lat.toFixed(4)}, {selectedPin.position.lng.toFixed(4)}
+                  </p>
+                  <p className="selectedPinDescription">
+                    {selectedPin.description?.trim()
+                      ? selectedPin.description.trim()
+                      : "No description available yet."}
+                  </p>
+                </div>
+              </section>
             ) : (
-              <div className="sidePanelList">
-                {pins
-                  .map((pin, index) => ({ pin, index }))
-                  .filter(({ pin }) =>
-                    (pin.title || "").toLowerCase().includes(searchQuery.toLowerCase())
-                  )
-                  .map(({ pin, index }) => (
-                    <button
-                      key={index}
-                      className={`locationItem ${selectedPinIndex === index ? "active" : ""}`}
-                      onClick={() => handlePinMenuClick(index)}
-                    >
-                      {pin.title || `Location ${index + 1}`}
-                    </button>
-                  ))}
-                {pins.filter((pin) =>
-                  (pin.title || "").toLowerCase().includes(searchQuery.toLowerCase())
-                ).length === 0 &&
-                  searchQuery && <div className="sidePanelStatus">No locations found</div>}
-              </div>
+              <>
+                <input
+                  type="text"
+                  className="locationSearch"
+                  placeholder="Search locations..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {pins.length === 0 ? (
+                  <div className="sidePanelStatus">Loading locations...</div>
+                ) : (
+                  <div className="sidePanelList">
+                    {filteredPins.map(({ pin, index }) => (
+                      <button
+                        key={index}
+                        className={`locationItem ${selectedPinIndex === index ? "active" : ""}`}
+                        onClick={() => handlePinMenuClick(index)}
+                      >
+                        {pin.title || `Location ${index + 1}`}
+                      </button>
+                    ))}
+                    {filteredPins.length === 0 && searchQuery && (
+                      <div className="sidePanelStatus">No locations found</div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </>
         )}

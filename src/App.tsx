@@ -10,11 +10,15 @@ type ViewerState = {
 export default function App() {
   const [viewerState, setViewerState] = useState<ViewerState>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [activeTab, setActiveTab] = useState<"viewer" | "about">("viewer");
-  const [viewerSidebarCollapsed, setViewerSidebarCollapsed] = useState(false);
-  const [aboutSidebarCollapsed, setAboutSidebarCollapsed] = useState(false);
-  const activeSidebarCollapsed =
-    activeTab === "viewer" ? viewerSidebarCollapsed : aboutSidebarCollapsed;
+  const [activeTab, setActiveTab] = useState<"map" | "info">("map");
+  const [mapSidebarCollapsed, setMapSidebarCollapsed] = useState(false);
+  const [infoSidebarCollapsed, setInfoSidebarCollapsed] = useState(false);
+  const activeSidebarCollapsed = activeTab === "map" ? mapSidebarCollapsed : infoSidebarCollapsed;
+  const tabToggleIcon = activeSidebarCollapsed
+    ? "/assets/icons/icon_tab.png"
+    : "/assets/icons/icon_tab_select.png";
+  const infoIcon = activeTab === "info" ? "/assets/icons/icon_info_select.png" : "/assets/icons/icon_info.png";
+  const mapIcon = activeTab === "map" ? "/assets/icons/icon_map_select.png" : "/assets/icons/icon_map.png";
 
   const openViewer = (path?: string, markers?: Array<Record<string, unknown>>) => {
     if (!path) return;
@@ -25,70 +29,73 @@ export default function App() {
     setViewerState(null);
   };
 
+  const toggleSidebar = () => {
+    if (activeTab === "map") {
+      setMapSidebarCollapsed((current) => !current);
+      return;
+    }
+    setInfoSidebarCollapsed((current) => !current);
+  };
+
   return (
     <div className="appShell">
-      <header className="appHeader">
-        {!activeSidebarCollapsed && (
-          <div className="tabList" role="tablist" aria-label="Virtual Soil sections">
-            <button
-              type="button"
-              className={`appTab ${activeTab === "viewer" ? "active" : ""}`}
-              onClick={() => setActiveTab("viewer")}
-              role="tab"
-              aria-selected={activeTab === "viewer"}
-            >
-              Viewer
-            </button>
-            <button
-              type="button"
-              className={`appTab ${activeTab === "about" ? "active" : ""}`}
-              onClick={() => setActiveTab("about")}
-              role="tab"
-              aria-selected={activeTab === "about"}
-            >
-              About
-            </button>
-          </div>
-        )}
-        <h1 className="appTitle">Virtual Soils</h1>
-      </header>
+      <nav className="iconRail" aria-label="Primary navigation">
+        <button
+          type="button"
+          className={`railButton ${activeSidebarCollapsed ? "" : "active"}`}
+          aria-label={activeSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          onClick={toggleSidebar}
+        >
+          <img src={tabToggleIcon} alt="" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className={`railButton ${activeTab === "info" ? "active" : ""}`}
+          aria-label="Open info section"
+          aria-pressed={activeTab === "info"}
+          onClick={() => setActiveTab("info")}
+        >
+          <img src={infoIcon} alt="" aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className={`railButton ${activeTab === "map" ? "active" : ""}`}
+          aria-label="Open map section"
+          aria-pressed={activeTab === "map"}
+          onClick={() => setActiveTab("map")}
+        >
+          <img src={mapIcon} alt="" aria-hidden="true" />
+        </button>
+      </nav>
 
-      <main className="tabContent">
-        {activeTab === "viewer" ? (
-          <UBCMap
-            openViewer={openViewer}
-            mapLoaded={mapLoaded}
-            setMapLoaded={setMapLoaded}
-            sidebarCollapsed={viewerSidebarCollapsed}
-            setSidebarCollapsed={setViewerSidebarCollapsed}
-            activeViewer={viewerState}
-            onCloseViewer={closeViewer}
-          />
-        ) : (
-          <section className="aboutPane">
-            <aside className={`sidePanel ${aboutSidebarCollapsed ? "collapsed" : ""}`}>
-              <button
-                type="button"
-                className="collapseToggle"
-                aria-label={aboutSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                onClick={() => setAboutSidebarCollapsed((current) => !current)}
-              >
-                {aboutSidebarCollapsed ? ">" : "<"}
-              </button>
+      <div className="appMain">
+        <h1 className="appTopTitle">Virtual Soil</h1>
+        <main className="tabContent">
+          {activeTab === "map" ? (
+            <UBCMap
+              openViewer={openViewer}
+              mapLoaded={mapLoaded}
+              setMapLoaded={setMapLoaded}
+              sidebarCollapsed={mapSidebarCollapsed}
+              activeViewer={viewerState}
+              onCloseViewer={closeViewer}
+            />
+          ) : (
+            <section className="aboutPane">
+              <aside className={`sidePanel infoSidePanel ${infoSidebarCollapsed ? "collapsed" : ""}`}>
+                {!infoSidebarCollapsed && (
+                  <>
+                    <h2 className="sidePanelTitle">About</h2>
+                    <nav className="sidePanelList" aria-label="About sections">
+                      <a href="#TheWhy">Why Virtual Soils?</a>
+                      <a href="#TheWhat">What are Radiance Fields?</a>
+                      <a href="#NextSteps">Project Next Steps</a>
+                    </nav>
+                  </>
+                )}
+              </aside>
 
-              {!aboutSidebarCollapsed && (
-                <>
-                  <h2 className="sidePanelTitle">About</h2>
-                  <nav className="sidePanelList" aria-label="About sections">
-                    <a href="#TheWhy">Why Virtual Soils?</a>
-                    <a href="#TheWhat">What are Radiance Fields?</a>
-                    <a href="#NextSteps">Project Next Steps</a>
-                  </nav>
-                </>
-              )}
-            </aside>
-
-            <article className="aboutContent floatSection">
+              <article className="aboutContent floatSection">
             {/* WHY */}
             <h2 id="TheWhy">Why Virtual Soils?</h2>
 
@@ -350,10 +357,11 @@ export default function App() {
               If you want to get in contact about the Virtual Soils project please email{" "}
               <a href="mailto:amy.wells@virtualsoils.ca">amy.wells@virtualsoils.ca</a>!
             </p>
-            </article>
-          </section>
-        )}
-      </main>
+              </article>
+            </section>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
