@@ -95,10 +95,10 @@ export class ScreenSpaceUI {
       alignItems: "center",
       gap: "6px",
       padding: "4px 8px",
+      background: "rgba(0, 0, 0, 0.5)",
       borderRadius: "4px",
       pointerEvents: "auto",
     });
-    this.applyHoverSurface(this.controlModeWrap, "4px");
 
     const modeLabel = document.createElement("span");
     modeLabel.textContent = "Controls";
@@ -126,10 +126,10 @@ export class ScreenSpaceUI {
       alignItems: "center",
       gap: "6px",
       padding: "4px 8px",
+      background: "rgba(0, 0, 0, 0.5)",
       borderRadius: "4px",
       pointerEvents: "auto",
     });
-    this.applyHoverSurface(perfWrap, "4px");
 
     const perfLabel = document.createElement("span");
     perfLabel.textContent = "Quality";
@@ -206,10 +206,10 @@ export class ScreenSpaceUI {
       alignItems: "center",
       gap: "6px",
       padding: "4px 8px",
+      background: "rgba(0, 0, 0, 0.5)",
       borderRadius: "4px",
       pointerEvents: "auto",
     });
-    this.applyHoverSurface(this.speedWrap, "4px");
 
     const speedLabel = document.createElement("span");
     speedLabel.textContent = "Speed";
@@ -239,6 +239,7 @@ export class ScreenSpaceUI {
     Object.assign(this.controlsHint.style, {
       maxWidth: "300px",
       padding: "8px 10px",
+      background: "rgba(0, 0, 0, 0.55)",
       borderRadius: "6px",
       fontSize: "11px",
       lineHeight: "1.45",
@@ -247,7 +248,6 @@ export class ScreenSpaceUI {
       marginTop: "2px",
       pointerEvents: "auto",
     });
-    this.applyHoverSurface(this.controlsHint, "6px");
     this.controlsHint.textContent =
       "Controls\n" +
       "LMB drag: look around\n" +
