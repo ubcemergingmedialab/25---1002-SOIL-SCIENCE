@@ -29,6 +29,17 @@ type Pin = {
   markers?: Array<Record<string, unknown>>;
 };
 
+type AdminMarkerMode = "add" | "edit";
+
+type MarkerFormPayload = {
+  icon: string;
+  scale: string;
+  posX: string;
+  posY: string;
+  posZ: string;
+  text: string;
+};
+
 const resolveAssetUrl = (raw: string) => {
   if (/^(https?:|blob:|data:)/i.test(raw)) return raw;
   if (raw.startsWith("/")) return new URL(raw, window.location.origin).href;
@@ -88,11 +99,71 @@ function getTextureForIcon(iconUrl: string, textureCache: Map<string, THREE.Text
   return texture;
 }
 
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const num = Number(trimmed);
+    return Number.isFinite(num) ? num : null;
+  }
+  return null;
+}
+
+function parseMarkerFormParam(raw: string | null): EditorMarker | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown> | null;
+    if (!parsed) return null;
+    const x = toFiniteNumber(parsed.posX);
+    const y = toFiniteNumber(parsed.posY);
+    const z = toFiniteNumber(parsed.posZ);
+    if (x === null || y === null || z === null) return null;
+    const radius = toFiniteNumber(parsed.scale) ?? undefined;
+    const label = typeof parsed.text === "string" ? parsed.text : "";
+    const icon = typeof parsed.icon === "string" ? parsed.icon : undefined;
+    return {
+      position: [x, y, z],
+      radius,
+      label,
+      icon,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function editorMarkerToFormPayload(marker: EditorMarker): MarkerFormPayload {
+  const toStringValue = (value: number | undefined) =>
+    typeof value === "number" && Number.isFinite(value) ? String(value) : "";
+  const [x, y, z] = marker.position;
+  return {
+    icon: marker.icon ?? "",
+    scale: toStringValue(marker.radius),
+    posX: toStringValue(x),
+    posY: toStringValue(y),
+    posZ: toStringValue(z),
+    text: marker.label ?? "",
+  };
+}
+
 export default function Editor() {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const appRef = useRef<ThreeApp | null>(null);
   const textureCacheRef = useRef<Map<string, THREE.Texture>>(new Map());
   const [searchParams] = useSearchParams();
+  const adminMarkerModeParam = searchParams.get("adminMarkerMode");
+  const adminMarkerMode: AdminMarkerMode | null =
+    adminMarkerModeParam === "add" || adminMarkerModeParam === "edit" ? adminMarkerModeParam : null;
+  const adminMarkerIndexParam = searchParams.get("markerIndex");
+  const adminMarkerIndexValue = adminMarkerIndexParam !== null ? Number(adminMarkerIndexParam) : null;
+  const adminMarkerIndex =
+    adminMarkerIndexValue !== null && Number.isInteger(adminMarkerIndexValue) && adminMarkerIndexValue >= 0
+      ? adminMarkerIndexValue
+      : null;
+  const isAdminSession = Boolean(adminMarkerMode && adminMarkerIndex !== null);
 
   const [pins, setPins] = useState<Pin[]>([]);
   const [selectedPinIndex, setSelectedPinIndex] = useState<number>(0);
@@ -142,6 +213,13 @@ export default function Editor() {
         setMarkers(parseApiMarkers(parsed));
       } catch {
         // ignore
+      }
+    } else {
+      const markerParam = searchParams.get("marker");
+      const singleMarker = parseMarkerFormParam(markerParam);
+      if (singleMarker) {
+        setMarkers([singleMarker]);
+        setSelectedMarkerIndex(0);
       }
     }
 
@@ -222,6 +300,62 @@ export default function Editor() {
       })
       .catch((err) => console.error("Failed to load pins for editor", err));
   }, [searchParams]);
+
+  const handleAdminPlaceMarker = useCallback(() => {
+    if (!adminMarkerMode || adminMarkerIndex === null) return;
+    let markerToSend: EditorMarker | null = null;
+    if (selectedMarkerIndex !== null && markers[selectedMarkerIndex]) {
+      markerToSend = markers[selectedMarkerIndex];
+    } else if (markers.length > 0) {
+      markerToSend = markers[markers.length - 1];
+    } else if (mode === "place" && appRef.current) {
+      const pos = appRef.current.getPlacementPosition();
+      const iconUrl = MARKER_ICON_OPTIONS[placementIconIndex]?.value ?? MARKER_ICON_OPTIONS[0].value;
+      markerToSend = {
+        position: [pos.x, pos.y, pos.z],
+        radius: placementRadius,
+        label: "New marker",
+        icon: iconUrl,
+      };
+    }
+
+    if (!markerToSend) {
+      window.alert("Select or place a marker first.");
+      return;
+    }
+
+    if (!window.opener) {
+      window.alert("Admin tab not available.");
+      return;
+    }
+
+    const markerFormPayload = editorMarkerToFormPayload(markerToSend);
+
+    // Send the selected marker back to the admin tab so the form can update immediately.
+    window.opener.postMessage(
+      {
+        type: "EDITOR_MARKER_SELECTED",
+        adminMarkerMode,
+        markerIndex: adminMarkerIndex,
+        marker: markerFormPayload,
+      },
+      window.location.origin
+    );
+
+    try {
+      window.close();
+    } catch {
+      // Ignore if the window cannot be closed (e.g., opened manually).
+    }
+  }, [
+    adminMarkerMode,
+    adminMarkerIndex,
+    markers,
+    mode,
+    placementIconIndex,
+    placementRadius,
+    selectedMarkerIndex,
+  ]);
 
   const selectedMarker = selectedMarkerIndex !== null ? markers[selectedMarkerIndex] : null;
 
@@ -508,6 +642,25 @@ export default function Editor() {
               Delete
             </button>
           </div>
+        )}
+
+        {isAdminSession && (
+          <button
+            type="button"
+            onClick={handleAdminPlaceMarker}
+            style={{
+              marginTop: "auto",
+              padding: "0.55rem 0.75rem",
+              borderRadius: 6,
+              border: "1px solid rgba(34,197,94,0.6)",
+              background: "rgba(34,197,94,0.18)",
+              color: "#bbf7d0",
+              fontSize: "0.95rem",
+              cursor: "pointer",
+            }}
+          >
+            Place Marker
+          </button>
         )}
       </aside>
     </div>

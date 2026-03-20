@@ -39,6 +39,15 @@ type FieldForm = {
   markers: MarkerForm[];
 };
 
+type AdminMarkerMode = "add" | "edit";
+
+type EditorMarkerSelectedMessage = {
+  type: "EDITOR_MARKER_SELECTED";
+  adminMarkerMode: AdminMarkerMode;
+  markerIndex: number;
+  marker: Partial<MarkerForm>;
+};
+
 function createMarker(): MarkerForm {
   return {
     icon: "",
@@ -95,6 +104,12 @@ const rowDangerButtonStyle: CSSProperties = {
   ...rowActionButtonStyle,
   background: "#5a1010",
   border: "1px solid #993333",
+};
+
+const placeMarkerButtonStyle: CSSProperties = {
+  ...rowActionButtonStyle,
+  background: "#14532d",
+  border: "1px solid #166534",
 };
 
 function toFormString(value: string | number | null | undefined) {
@@ -350,6 +365,66 @@ export default function Admin() {
     });
   }
 
+  function openMarkerEditor(mode: AdminMarkerMode, markerIndex: number, marker: MarkerForm, gaussianPath?: string) {
+    const params = new URLSearchParams();
+    params.set("adminMarkerMode", mode);
+    params.set("markerIndex", String(markerIndex));
+    params.set("marker", JSON.stringify(marker));
+    const trimmedPath = gaussianPath?.trim();
+    if (trimmedPath) params.set("gaussianPath", trimmedPath);
+    const editorUrl = new URL("/editor", window.location.origin);
+    editorUrl.search = params.toString();
+    window.open(editorUrl.toString(), "_blank");
+  }
+
+  // Listen for marker updates coming back from the editor tab.
+  useEffect(() => {
+    function handleEditorMessage(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data as EditorMarkerSelectedMessage | undefined;
+      if (!data || data.type !== "EDITOR_MARKER_SELECTED") return;
+      const mode = data.adminMarkerMode;
+      if (mode !== "add" && mode !== "edit") return;
+      const markerIndex = Number(data.markerIndex);
+      if (!Number.isInteger(markerIndex) || markerIndex < 0) return;
+      const marker = data.marker ?? {};
+      const toStringValue = (value: unknown) => {
+        if (typeof value === "string") return value;
+        if (typeof value === "number" && Number.isFinite(value)) return String(value);
+        return "";
+      };
+      const sanitized: MarkerForm = {
+        icon: toStringValue((marker as MarkerForm).icon),
+        scale: toStringValue((marker as MarkerForm).scale),
+        posX: toStringValue((marker as MarkerForm).posX),
+        posY: toStringValue((marker as MarkerForm).posY),
+        posZ: toStringValue((marker as MarkerForm).posZ),
+        text: toStringValue((marker as MarkerForm).text),
+      };
+
+      if (mode === "add") {
+        setForm((prev) => {
+          if (!prev.markers[markerIndex]) return prev;
+          return {
+            ...prev,
+            markers: prev.markers.map((existing, idx) => (idx === markerIndex ? sanitized : existing)),
+          };
+        });
+      } else {
+        setEditForm((prev) => {
+          if (!prev || !prev.markers[markerIndex]) return prev;
+          return {
+            ...prev,
+            markers: prev.markers.map((existing, idx) => (idx === markerIndex ? sanitized : existing)),
+          };
+        });
+      }
+    }
+
+    window.addEventListener("message", handleEditorMessage);
+    return () => window.removeEventListener("message", handleEditorMessage);
+  }, []);
+
   async function onAdd(e?: FormEvent<HTMLFormElement>) {
     if (e) e.preventDefault();
     const result = buildPayloadFromForm(form);
@@ -433,7 +508,7 @@ export default function Admin() {
 
   // Authenticated portal
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 24, background: "#000", color: "#fff", minHeight: "100vh" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1>Admin</h1>
         <button onClick={onLogout}>Log out</button>
@@ -669,17 +744,33 @@ export default function Admin() {
                                   background: "#0f0f0f",
                                 }}
                               >
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    gap: 8,
+                                  }}
+                                >
                                   <strong>Marker #{idx + 1}</strong>
-                                  {currentEditForm.markers.length > 1 && (
+                                  <div style={{ display: "flex", gap: 8 }}>
                                     <button
                                       type="button"
-                                      style={{ ...modalButtonStyle, background: "#661818", border: "1px solid #993333" }}
-                                      onClick={() => removeEditMarker(idx)}
+                                      style={placeMarkerButtonStyle}
+                                      onClick={() => openMarkerEditor("edit", idx, marker, currentEditForm.File)}
                                     >
-                                      Remove
+                                      Place Marker
                                     </button>
-                                  )}
+                                    {currentEditForm.markers.length > 1 && (
+                                      <button
+                                        type="button"
+                                        style={{ ...modalButtonStyle, background: "#661818", border: "1px solid #993333" }}
+                                        onClick={() => removeEditMarker(idx)}
+                                      >
+                                        Remove
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                                 <input
                                   placeholder="Icon (e.g. assets/icons/markerIcon1.png)"
@@ -916,17 +1007,33 @@ export default function Admin() {
                       background: "#0f0f0f",
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 8,
+                      }}
+                    >
                       <strong>Marker #{idx + 1}</strong>
-                      {form.markers.length > 1 && (
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button
+                          type="button"
+                          style={placeMarkerButtonStyle}
+                          onClick={() => openMarkerEditor("add", idx, marker, form.File)}
+                        >
+                          Place Marker
+                        </button>
+                        {form.markers.length > 1 && (
                           <button
                             type="button"
                             style={{ ...modalButtonStyle, background: "#661818", border: "1px solid #993333" }}
                             onClick={() => removeMarker(idx)}
                           >
-                          Remove
-                        </button>
-                      )}
+                            Remove
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <input
                       placeholder="Icon (e.g. assets/icons/markerIcon1.png)"
