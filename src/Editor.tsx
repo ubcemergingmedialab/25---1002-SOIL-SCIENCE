@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import * as THREE from "three";
 import { ThreeApp } from "./three/ThreeApp";
+import type { ControlMode } from "./three/ScreenSpace";
 import type { MarkerInput } from "./three/WorldMarkers";
 import { awsClient } from "./lib/awsClient";
 import { listFields, updateFieldMarkers } from "./adminApi";
@@ -170,6 +171,8 @@ export default function Editor() {
   const fieldId = fieldIdParam ? fieldIdParam.trim() : "";
   const isFieldManagement = Boolean(fieldId);
   const gaussianPathParam = searchParams.get("gaussianPath") || searchParams.get("path");
+  const controlModeParam = searchParams.get("controlMode");
+  const defaultControlMode: ControlMode = controlModeParam === "fly" || controlModeParam === "orbit" ? controlModeParam : "orbit";
 
   const [pins, setPins] = useState<Pin[]>([]);
   const [selectedPinIndex, setSelectedPinIndex] = useState<number>(0);
@@ -218,7 +221,7 @@ export default function Editor() {
 
   useEffect(() => {
     if (!wrapRef.current) return;
-    const app = new ThreeApp(wrapRef.current);
+    const app = new ThreeApp(wrapRef.current, { defaultControlMode });
     appRef.current = app;
 
     const pathFromUrl = gaussianPathParam;
@@ -252,7 +255,7 @@ export default function Editor() {
       app.dispose();
       appRef.current = null;
     };
-  }, [searchParams, gaussianPathParam, isFieldManagement]);
+  }, [searchParams, gaussianPathParam, isFieldManagement, defaultControlMode]);
 
   useEffect(() => {
     if (!isFieldManagement || !fieldId) {

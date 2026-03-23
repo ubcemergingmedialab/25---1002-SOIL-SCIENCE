@@ -219,6 +219,7 @@ export default function Admin() {
   function openMarkerManager(fieldId: string, gaussianPath?: string) {
     const params = new URLSearchParams();
     params.set("fieldId", fieldId);
+    params.set("controlMode", "fly");
     const trimmedPath = gaussianPath?.trim();
     if (trimmedPath) params.set("gaussianPath", trimmedPath);
     const editorUrl = new URL("/editor", window.location.origin);

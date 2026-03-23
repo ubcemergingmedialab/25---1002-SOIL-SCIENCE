@@ -19,6 +19,10 @@ const DEFAULT_PLAY_AREA_BOUNDS = new THREE.Box3(
   new THREE.Vector3(25, 15, 25)
 );
 
+type ThreeAppOptions = {
+  defaultControlMode?: ControlMode;
+};
+
 export class ThreeApp {
   // Core
   private container: HTMLElement;
@@ -43,7 +47,7 @@ export class ThreeApp {
   private flyControls: FlyControls | null = null;
   private orbitControls: OrbitControls | null = null;
   private controlMode: ControlMode = "fly";
-  private readonly defaultControlMode: ControlMode = "orbit";
+  private readonly defaultControlMode: ControlMode;
   private flySpeed = 0.5;
   private screenUI!: ScreenSpaceUI;
   private gaussian!: GaussianViewer;
@@ -72,8 +76,9 @@ export class ThreeApp {
   // ------------------
   // CONSTRUCTOR
   // ------------------
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, options?: ThreeAppOptions) {
     this.container = container;
+    this.defaultControlMode = options?.defaultControlMode ?? "orbit";
 
     //systems
     this.initRenderer();
