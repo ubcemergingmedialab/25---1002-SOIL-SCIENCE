@@ -262,6 +262,13 @@ export default function UBCMap({
     }).addTo(map);
 
     mapRef.current = map;
+    mapRef.current.addListener("click", () => {
+      setSelectedPinIndex(null);
+      if (infoWindowRef.current) {
+        infoWindowRef.current.close();
+        infoWindowRef.current = null;
+      }
+    });
 
     markersRef.current.forEach((m) => map.removeLayer(m));
     markersRef.current = [];
