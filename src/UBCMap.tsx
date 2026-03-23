@@ -158,7 +158,6 @@ export default function UBCMap({
   mapLoaded,
   setMapLoaded,
   sidebarCollapsed,
-  setSidebarCollapsed,
   activeViewer,
   onCloseViewer,
 }: {
@@ -166,7 +165,6 @@ export default function UBCMap({
   mapLoaded: boolean;
   setMapLoaded: (loaded: boolean) => void;
   sidebarCollapsed: boolean;
-  setSidebarCollapsed: (collapsed: boolean | ((current: boolean) => boolean)) => void;
   activeViewer: { path: string; markers?: Array<Record<string, unknown>> } | null;
   onCloseViewer: () => void;
 }) {
@@ -176,7 +174,14 @@ export default function UBCMap({
   const pinToMarkerRef = useRef<Map<number, L.Marker>>(new Map());
   const [pins, setPins] = useState<Pin[]>([]);
   const [selectedPinIndex, setSelectedPinIndex] = useState<number | null>(null);
+  const [hoveredPinIndex, setHoveredPinIndex] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const selectedPin = selectedPinIndex !== null ? pins[selectedPinIndex] : null;
+  const filteredPins = pins
+    .map((pin, index) => ({ pin, index }))
+    .filter(({ pin }) => (pin.title || "").toLowerCase().includes(searchQuery.toLowerCase()));
+
+
 
   useEffect(() => {
     let cancelled = false;
@@ -325,7 +330,6 @@ export default function UBCMap({
           setTimeout(checkAndClick, 100);
         }
       };
-      setTimeout(checkAndClick, 500);
       return;
     }
 
@@ -338,49 +342,65 @@ export default function UBCMap({
 
   return (
     <section className="viewerPane">
-      <aside className={`sidePanel ${sidebarCollapsed ? "collapsed" : ""}`}>
-        <button
-          type="button"
-          className="collapseToggle"
-          aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          onClick={() => setSidebarCollapsed((current) => !current)}
-        >
-          {sidebarCollapsed ? ">" : "<"}
-        </button>
-
+      <aside
+        className={`sidePanel mapSidePanel ${selectedPin ? "pinSelected" : ""} ${
+          sidebarCollapsed ? "collapsed" : ""
+        }`}
+      >
         {!sidebarCollapsed && (
           <>
-            <h2 className="sidePanelTitle">Virtual Soil Library</h2>
-            <input
-              type="text"
-              className="locationSearch"
-              placeholder="Search locations..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {pins.length === 0 ? (
-              <div className="sidePanelStatus">Loading locations...</div>
+            {selectedPin ? (
+              <section className="selectedPinCard" aria-live="polite">
+                <div className="selectedPinHero">
+                  <img
+                    className="selectedPinImage"
+                    src={selectedPin.thumbnail || placeholderImage}
+                    alt={selectedPin.thumbnailAlt || `${selectedPin.title || "Field"} preview`}
+                  />
+                </div>
+                <div className="selectedPinBody">
+                  <h2>{selectedPin.title || "Untitled field"}</h2>
+                  <p className="selectedPinMeta">
+                    <span className="selectedPinMetaLabel">Coordinates:</span>{" "}
+                    {selectedPin.position.lat.toFixed(4)}, {selectedPin.position.lng.toFixed(4)}
+                  </p>
+                  <p className="selectedPinDescription">
+                    {selectedPin.description?.trim()
+                      ? selectedPin.description.trim()
+                      : "No description available yet."}
+                  </p>
+                </div>
+              </section>
             ) : (
-              <div className="sidePanelList">
-                {pins
-                  .map((pin, index) => ({ pin, index }))
-                  .filter(({ pin }) =>
-                    (pin.title || "").toLowerCase().includes(searchQuery.toLowerCase())
-                  )
-                  .map(({ pin, index }) => (
-                    <button
-                      key={index}
-                      className={`locationItem ${selectedPinIndex === index ? "active" : ""}`}
-                      onClick={() => handlePinMenuClick(index)}
-                    >
-                      {pin.title || `Location ${index + 1}`}
-                    </button>
-                  ))}
-                {pins.filter((pin) =>
-                  (pin.title || "").toLowerCase().includes(searchQuery.toLowerCase())
-                ).length === 0 &&
-                  searchQuery && <div className="sidePanelStatus">No locations found</div>}
-              </div>
+              <>
+                <input
+                  type="text"
+                  className="locationSearch"
+                  placeholder="Search locations..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {pins.length === 0 ? (
+                  <div className="sidePanelStatus">Loading locations...</div>
+                ) : (
+                  <div className="sidePanelList">
+                    {filteredPins.map(({ pin, index }) => (
+                      <button
+                        key={index}
+                        className={`locationItem ${
+                          selectedPinIndex === index || hoveredPinIndex === index ? "active" : ""
+                        }`}
+                        onClick={() => handlePinMenuClick(index)}
+                      >
+                        {pin.title || `Location ${index + 1}`}
+                      </button>
+                    ))}
+                    {filteredPins.length === 0 && searchQuery && (
+                      <div className="sidePanelStatus">No locations found</div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </>
         )}

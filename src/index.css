@@ -8,7 +8,7 @@ body,
 :root {
   font-family: "Helvetica Neue", Arial, sans-serif;
   color: #1f1f1f;
-  background: #c4c4c8;
+  background: #5c7ea5;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -30,72 +30,74 @@ input {
 }
 
 .appShell {
+  height: 100%;
+  display: flex;
+  background: #5c7ea5;
+  overflow: hidden;
+}
+
+.iconRail {
+  width: 58px;
+  min-width: 58px;
+  background: #482307;
+  border-right: 2px solid rgba(0, 0, 0, 0.28);
   display: flex;
   flex-direction: column;
-  min-height: 100%;
-  background: #c4c4c8;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.95rem 0.5rem;
 }
 
-.appHeader {
-  height: 68px;
-  padding: 0 1rem;
-  display: flex;
-  align-items: flex-end;
-  position: relative;
-}
-
-.appTitle {
-  margin: 0;
-  font-size: clamp(2rem, 3.5vw, 2.8rem);
-  font-style: italic;
-  font-weight: 500;
-  text-align: center;
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 0.35rem;
-  pointer-events: none;
-}
-
-.tabList {
-  display: inline-flex;
-  align-items: flex-end;
-  gap: 0;
-  margin-bottom: -1px;
-  position: relative;
-  z-index: 5;
-}
-
-.appTab {
-  padding: 0.45rem 0.75rem;
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  border-bottom: none;
-  border-top-left-radius: 8px;
-  border-top-right-radius: 8px;
-  font-size: 0.95rem;
-  font-style: italic;
-  color: #1f1f1f;
-  background: rgba(255, 255, 255, 0.28);
+.railButton {
+  width: 60px;
+  height: 60px;
+  border: none;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  padding: 0;
   cursor: pointer;
 }
 
-.appTab.active {
-  background: rgba(255, 255, 255, 0.16);
-  font-weight: 600;
+.railButton img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
 }
 
-.appTab + .appTab {
-  margin-left: -1px;
+.railButton.active,
+.railButton:hover {
+  opacity: 0.88;
+}
+
+.appMain {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.appTopTitle {
+  position: absolute;
+  top: 1rem;
+  right: 1.1rem;
+  z-index: 3;
+  margin: 0;
+  color: #202020;
+  font-size: clamp(1.8rem, 2.2vw, 2.1rem);
+  font-weight: 600;
+  text-shadow: -1px -1px 0 #f0f0f0, 1px -1px 0 #f0f0f0, -1px 1px 0 #f0f0f0,
+    1px 1px 0 #f0f0f0;
 }
 
 .tabContent {
-  flex: 1;
-  min-height: 0;
+  height: 100%;
 }
 
 .viewerPane,
 .aboutPane {
-  height: calc(100dvh - 68px);
+  height: 100%;
   display: flex;
   min-height: 0;
 }
@@ -103,96 +105,146 @@ input {
 .sidePanel {
   width: 300px;
   min-width: 300px;
-  background: rgba(255, 255, 255, 0.16);
-  border-right: 1px solid rgba(0, 0, 0, 0.08);
-  padding: 1.25rem 1rem;
-  position: relative;
+  background: #b57c4f;
+  padding: 1rem 0.85rem;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
+  gap: 0.8rem;
   overflow-y: auto;
+  position: relative;
   transition: width 0.2s ease, min-width 0.2s ease, padding 0.2s ease;
 }
 
 .sidePanel.collapsed {
-  width: 58px;
-  min-width: 58px;
-  padding: 1rem 0.5rem;
+  width: 0;
+  min-width: 0;
+  padding: 0;
   overflow: hidden;
 }
 
-.collapseToggle {
-  position: absolute;
-  top: 1.1rem;
-  right: 0.6rem;
-  width: 34px;
-  height: 34px;
-  border: none;
-  border-radius: 8px;
-  font-size: 1rem;
-  color: #ffffff;
-  background: rgba(0, 0, 0, 0.14);
-  cursor: pointer;
-  z-index: 1;
+.sidePanelTitle {
+  margin: 0.1rem 0 0.4rem;
+  font-size: 2.6rem;
+  font-style: italic;
+  font-weight: 600;
+  color: #2a1a0d;
 }
 
-.sidePanelTitle {
-  margin: 1rem 0 0.75rem;
-  font-size: 2rem;
-  font-style: italic;
-  font-weight: 500;
-  color: #1f1f1f;
-  min-width: 0;
-  overflow-wrap: break-word;
+.mapSidePanel {
+  padding-top: 1.25rem;
+}
+
+.mapSidePanel.pinSelected {
+  background: #e1e1e4;
+  padding: 0;
 }
 
 .locationSearch {
   width: 100%;
-  min-width: 0;
-  padding: 0.55rem 0.65rem;
-  border: 1px solid rgba(0, 0, 0, 0.15);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.5);
-  margin-bottom: 0.75rem;
   box-sizing: border-box;
+  padding: 0.55rem 0.8rem;
+  border: none;
+  border-radius: 999px;
+  background: #f6f5ed;
+  color: #222;
 }
 
 .sidePanelList {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  min-width: 0;
+  gap: 0.75rem;
+  margin-bottom: 0.4rem;
 }
 
 .locationItem,
 .sidePanelList a {
-  display: block;
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  padding: 0.7rem;
+  display: block;
+  padding: 0.75rem 0.8rem;
   border: none;
   border-radius: 8px;
   text-align: left;
-  color: #4e4e4e;
-  background: rgba(255, 255, 255, 0.32);
+  background: #ece3d9;
+  color: #3a2e21;
+  font-size: 1rem;
+  font-style: italic;
+  font-weight: 600;
   cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.locationItem.active,
+.locationItem.active {
+  background: #ffd25f;
+  color: #2b1a00;
+  box-shadow: inset 0 0 0 2px rgba(78, 44, 0, 0.35);
+}
+
 .locationItem:hover,
 .sidePanelList a:hover {
-  color: #111111;
-  background: rgba(255, 255, 255, 0.6);
+  background: #f5eee8;
 }
 
 .sidePanelStatus {
-  color: #555555;
-  font-size: 0.92rem;
+  color: rgba(30, 20, 10, 0.78);
+  font-size: 0.94rem;
   padding: 0.4rem 0.2rem;
+}
+
+.selectedPinCard {
+  background: #e1e1e4;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.selectedPinHero {
+  position: relative;
+}
+
+.selectedPinImage {
+  width: 100%;
+  height: 205px;
+  object-fit: cover;
+  display: block;
+}
+
+.selectedPinBody {
+  padding: 0.95rem 0.8rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.selectedPinBody h2 {
+  margin: 0 0 0.3rem;
+  font-size: 1.5rem;
+  line-height: 1.02;
+  color: #111;
+}
+
+.selectedPinMeta {
+  margin: 0.08rem 0;
+  font-size: 0.9rem;
+  color: #2f2f2f;
+  font-weight: 400;
+}
+
+.selectedPinMetaLabel {
+  font-weight: 700;
+}
+
+.selectedPinDescription {
+  margin: 0.45rem 0 0.35rem;
+  color: #363636;
+  line-height: 1.45;
+  font-size: 0.95rem;
+  max-height: 12rem;
+  overflow-y: auto;
 }
 
 .mapPane {
@@ -200,6 +252,7 @@ input {
   min-width: 0;
   position: relative;
   overflow: hidden;
+  background: #5c7ea5;
 }
 
 .mapFrame {
@@ -218,8 +271,8 @@ input {
   inset: 0;
   display: grid;
   place-items: center;
-  background: #a4a4a8;
-  color: #ffffff;
+  background: #5c7ea5;
+  color: #f7f7f7;
   font-size: 1.25rem;
   cursor: pointer;
 }
@@ -228,8 +281,8 @@ input {
   flex: 1;
   min-width: 0;
   overflow-y: auto;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 2rem clamp(1.1rem, 2vw, 2rem);
+  background: #d0d2d8;
+  padding: 4.5rem clamp(1.1rem, 2vw, 2rem) 2rem;
 }
 
 .aboutContent h2 {
@@ -301,13 +354,12 @@ canvas {
   height: 100%;
 }
 
-/* Google Maps InfoWindow dark theme overrides */
+/* Strip default Google InfoWindow frame so our card matches mockup */
 .gm-style .gm-style-iw-c {
-  background: #d4d4d8 !important;
-  border-radius: 8px !important;
   padding: 0 !important;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2) !important;
-  border: 1px solid rgba(0, 0, 0, 0.12) !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 
 .gm-style .gm-style-iw-d {
@@ -315,44 +367,33 @@ canvas {
   padding: 0 !important;
 }
 
+.gm-style .gm-style-iw-tc,
 .gm-style .gm-style-iw-tc::after {
-  background: #d4d4d8 !important;
-  border-left: 1px solid rgba(0, 0, 0, 0.12) !important;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12) !important;
+  display: none !important;
 }
 
-.gm-style .gm-style-iw-chr button {
-  background: rgba(0, 0, 0, 0.18) !important;
-  border-radius: 50% !important;
-  width: 32px !important;
-  height: 32px !important;
-  opacity: 1 !important;
+.gm-style .gm-ui-hover-effect,
+.gm-style .gm-style-iw-chr {
+  display: none !important;
 }
 
-.gm-style .gm-style-iw-chr button span {
-  margin: 0 !important;
-  width: 18px !important;
-  height: 18px !important;
-  filter: none !important;
-}
+@media (max-width: 980px) {
+  .appTopTitle {
+    font-size: 1.5rem;
+  }
 
-.info-window-desc::-webkit-scrollbar {
-  width: 6px;
-}
+  .sidePanel {
+    width: 255px;
+    min-width: 255px;
+  }
 
-.info-window-desc::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 3px;
-}
+  .selectedPinBody h2 {
+    font-size: 1.5rem;
+  }
 
-.info-window-desc::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-}
-
-.info-window-desc {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) rgba(255, 255, 255, 0.05);
+  .enterFieldButton {
+    font-size: 2.1rem;
+  }
 }
 
 @media (max-width: 900px) {
@@ -361,10 +402,5 @@ canvas {
     float: none;
     width: 100%;
     margin: 1rem 0;
-  }
-
-  .sidePanel {
-    width: 250px;
-    min-width: 250px;
   }
 }

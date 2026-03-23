@@ -109,7 +109,7 @@ export class GaussianViewer {
     this.viewer.render();
   }
 
-  async loadScene(path: string) {
+  async loadScene(path: string, onProgress?: (progress: number | null) => void) {
     if (!path) return;
     if (this.destroyed) return;
     if (this.currentPath === path) return;
@@ -126,6 +126,8 @@ export class GaussianViewer {
       }
       if (this.destroyed || token !== this.loadToken) return;
 
+      onProgress?.(null);
+
       await this.viewer.addSplatScene(path, {
         position: [0, 0, 0],
         scale: [1, 1, 1],
@@ -136,6 +138,7 @@ export class GaussianViewer {
         splatAlphaRemovalThreshold: this.alphaThreshold,
       });
       await this.waitForFrames(30); // Reduced from 60
+      onProgress?.(1);
     } catch (e) {
       if (this.destroyed || token !== this.loadToken) {
         // Ignore errors from loads that were superseded or canceled by dispose
