@@ -38,13 +38,13 @@ function buildPopupContent(
   const content = document.createElement("div");
   content.className = "info-window-content";
   content.style.fontFamily = "system-ui, -apple-system, sans-serif";
-  content.style.minWidth = "380px";
-  content.style.maxWidth = "480px";
+  content.style.minWidth = "280px";
+  content.style.maxWidth = "280px";
   content.style.overflow = "hidden";
-  content.style.background = "#d4d4d8";
+  content.style.background = "#ffffff";
   content.style.borderRadius = "8px";
-  content.style.border = "1px solid rgba(0, 0, 0, 0.12)";
-  content.style.boxShadow = "0 12px 30px rgba(0, 0, 0, 0.2)";
+  content.style.border = "1px solid rgba(0, 0, 0, 0.16)";
+  content.style.boxShadow = "0 4px 0 rgba(0, 0, 0, 0.16)";
 
   const card = document.createElement("div");
   card.style.display = "flex";
@@ -53,7 +53,7 @@ function buildPopupContent(
 
   const imgWrap = document.createElement("div");
   imgWrap.style.width = "100%";
-  imgWrap.style.height = "180px";
+  imgWrap.style.height = "132px";
   imgWrap.style.overflow = "hidden";
   imgWrap.style.position = "relative";
 
@@ -68,22 +68,22 @@ function buildPopupContent(
   imgWrap.appendChild(img);
 
   const body = document.createElement("div");
-  body.style.padding = "1.25rem 1.5rem 1.5rem";
+  body.style.padding = "0.62rem 0.72rem 0.72rem";
   body.style.display = "flex";
   body.style.flexDirection = "column";
-  body.style.gap = "0.75rem";
+  body.style.gap = "0.22rem";
 
   const title = document.createElement("h3");
   title.textContent = pin.title || "Untitled field";
   title.style.margin = "0";
-  title.style.fontSize = "1.25rem";
-  title.style.color = "#222222";
-  title.style.lineHeight = "1.3";
+  title.style.fontSize = "1.42rem";
+  title.style.color = "#121212";
+  title.style.lineHeight = "1.12";
   title.style.fontWeight = "600";
 
   const coords = document.createElement("div");
-  coords.style.fontSize = "0.85rem";
-  coords.style.color = "#505050";
+  coords.style.fontSize = "0.79rem";
+  coords.style.color = "#2f2f2f";
   coords.style.display = "flex";
   coords.style.gap = "1rem";
   coords.innerHTML = `
@@ -106,35 +106,34 @@ function buildPopupContent(
 
   const button = document.createElement("button");
   button.type = "button";
-  button.textContent = "Open 3D Viewer";
-  button.style.marginTop = "0.5rem";
-  button.style.width = "100%";
-  button.style.padding = "0.75rem 1.25rem";
-  button.style.borderRadius = "6px";
+  button.textContent = "→  Enter";
+  button.style.marginTop = "0.38rem";
+  button.style.width = "60%";
+  button.style.alignSelf = "center";
+  button.style.padding = "0.2rem 0.85rem 0.28rem";
+  button.style.borderRadius = "999px";
   button.style.border = "none";
   button.style.cursor = "pointer";
-  button.style.background = "#9fb57a";
-  button.style.color = "#1d2514";
-  button.style.fontSize = "0.95rem";
-  button.style.fontWeight = "600";
-  button.style.transition = "transform 0.15s, box-shadow 0.15s";
-  button.style.boxShadow = "0 4px 10px rgba(0, 0, 0, 0.2)";
+  button.style.background = "#7b9850";
+  button.style.color = "#f3f5ec";
+  button.style.fontSize = "1.65rem";
+  button.style.lineHeight = "1";
+  button.style.fontWeight = "700";
+  button.style.letterSpacing = "0.01em";
+  button.style.transition = "filter 0.15s ease";
   if (!pin.path) {
     button.style.opacity = "0.5";
     button.style.cursor = "not-allowed";
     button.style.background = "#b7b7bb";
-    button.style.boxShadow = "none";
     button.disabled = true;
   }
   button.onmouseenter = () => {
     if (pin.path) {
-      button.style.transform = "translateY(-1px)";
-      button.style.boxShadow = "0 6px 14px rgba(0, 0, 0, 0.25)";
+      button.style.filter = "brightness(0.95)";
     }
   };
   button.onmouseleave = () => {
-    button.style.transform = "translateY(0)";
-    button.style.boxShadow = "0 4px 10px rgba(0, 0, 0, 0.2)";
+    button.style.filter = "none";
   };
   button.addEventListener("click", () => {
     if (pin.path) {
@@ -145,7 +144,6 @@ function buildPopupContent(
 
   body.appendChild(title);
   body.appendChild(coords);
-  body.appendChild(desc);
   body.appendChild(button);
   card.appendChild(imgWrap);
   card.appendChild(body);
@@ -164,6 +162,7 @@ export default function UBCMap({
   openViewer: (path?: string, markers?: Array<Record<string, unknown>>) => void;
   mapLoaded: boolean;
   setMapLoaded: (loaded: boolean) => void;
+  setSidebarCollapsed: (collapsed: boolean | ((current: boolean) => boolean)) => void;
   sidebarCollapsed: boolean;
   activeViewer: { path: string; markers?: Array<Record<string, unknown>> } | null;
   onCloseViewer: () => void;
@@ -181,7 +180,23 @@ export default function UBCMap({
     .map((pin, index) => ({ pin, index }))
     .filter(({ pin }) => (pin.title || "").toLowerCase().includes(searchQuery.toLowerCase()));
 
+  const smoothFocusPin = (position: any, targetZoom = 15) => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+    map.panTo(position);
 
+    const stepZoom = () => {
+      const currentZoom = map.getZoom();
+      if (typeof currentZoom !== "number" || currentZoom === targetZoom) return;
+      const nextZoom = currentZoom < targetZoom ? currentZoom + 1 : currentZoom - 1;
+      map.setZoom(nextZoom);
+      if (nextZoom !== targetZoom) {
+        setTimeout(stepZoom, 90);
+      }
+    };
+
+    setTimeout(stepZoom, 180);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -247,6 +262,9 @@ export default function UBCMap({
     }).addTo(map);
 
     mapRef.current = map;
+    map.on('click', () => { setSelectedPinIndex(null);})
+     
+    
 
     markersRef.current.forEach((m) => map.removeLayer(m));
     markersRef.current = [];
@@ -343,9 +361,8 @@ export default function UBCMap({
   return (
     <section className="viewerPane">
       <aside
-        className={`sidePanel mapSidePanel ${selectedPin ? "pinSelected" : ""} ${
-          sidebarCollapsed ? "collapsed" : ""
-        }`}
+        className={`sidePanel mapSidePanel ${selectedPin ? "pinSelected" : ""} ${sidebarCollapsed ? "collapsed" : ""
+          }`}
       >
         {!sidebarCollapsed && (
           <>
@@ -387,9 +404,8 @@ export default function UBCMap({
                     {filteredPins.map(({ pin, index }) => (
                       <button
                         key={index}
-                        className={`locationItem ${
-                          selectedPinIndex === index || hoveredPinIndex === index ? "active" : ""
-                        }`}
+                        className={`locationItem ${selectedPinIndex === index || hoveredPinIndex === index ? "active" : ""
+                          }`}
                         onClick={() => handlePinMenuClick(index)}
                       >
                         {pin.title || `Location ${index + 1}`}
@@ -407,7 +423,7 @@ export default function UBCMap({
       </aside>
 
       <div className="mapPane">
-         {activeViewer && (
+        {activeViewer && (
           <div className="embeddedViewerOverlay">
             <Viewer
               gaussianPath={activeViewer.path}
@@ -423,7 +439,7 @@ export default function UBCMap({
             Click to load map
           </div>
         )}
-       
+
       </div>
     </section>
   );
