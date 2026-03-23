@@ -1,6 +1,6 @@
 import { CSSProperties, FormEvent, Fragment, useEffect, useState } from "react";
 import { fetchAuthSession, signInWithRedirect, signOut } from "aws-amplify/auth";
-import { CreateFieldPayload, createField, deleteField, listFields, updateField } from "./adminApi";
+import { CreateFieldPayload, MarkerPayload, createField, deleteField, listFields, updateField } from "./adminApi";
 
 type FieldItem = {
   FieldID: string;
@@ -16,17 +16,6 @@ type FieldItem = {
 
 type AuthState = "checking" | "authed";
 
-type MarkerForm = {
-  icon: string;
-  scale: string;
-  posX: string;
-  posY: string;
-  posZ: string;
-  text: string;
-};
-
-type MarkerPayload = [string, number, [number, number, number], string];
-
 type FieldForm = {
   FieldID: string;
   Name: string;
@@ -36,28 +25,7 @@ type FieldForm = {
   Longitude: string;
   Thumbnail: string;
   ThumbnailAlt: string;
-  markers: MarkerForm[];
 };
-
-type AdminMarkerMode = "add" | "edit";
-
-type EditorMarkerSelectedMessage = {
-  type: "EDITOR_MARKER_SELECTED";
-  adminMarkerMode: AdminMarkerMode;
-  markerIndex: number;
-  marker: Partial<MarkerForm>;
-};
-
-function createMarker(): MarkerForm {
-  return {
-    icon: "",
-    scale: "",
-    posX: "",
-    posY: "",
-    posZ: "",
-    text: "",
-  };
-}
 
 function createEmptyForm(): FieldForm {
   return {
@@ -69,7 +37,6 @@ function createEmptyForm(): FieldForm {
     Longitude: "",
     Thumbnail: "",
     ThumbnailAlt: "",
-    markers: [createMarker()],
   };
 }
 
@@ -106,38 +73,12 @@ const rowDangerButtonStyle: CSSProperties = {
   border: "1px solid #993333",
 };
 
-const placeMarkerButtonStyle: CSSProperties = {
-  ...rowActionButtonStyle,
-  background: "#14532d",
-  border: "1px solid #166534",
-};
-
 function toFormString(value: string | number | null | undefined) {
   if (value === undefined || value === null) return "";
   return String(value);
 }
 
-function markersFromItem(raw: unknown): MarkerForm[] {
-  if (!Array.isArray(raw)) return [];
-  return (raw as MarkerPayload[])
-    .map((entry) => {
-      if (!Array.isArray(entry) || entry.length < 4) return null;
-      const [icon, scale, position, text] = entry as MarkerPayload;
-      if (!Array.isArray(position) || position.length < 3) return null;
-      return {
-        icon: toFormString(icon),
-        scale: toFormString(scale),
-        posX: toFormString(position[0]),
-        posY: toFormString(position[1]),
-        posZ: toFormString(position[2]),
-        text: toFormString(text),
-      };
-    })
-    .filter((marker): marker is MarkerForm => Boolean(marker));
-}
-
 function createFormFromItem(item: FieldItem): FieldForm {
-  const normalizedMarkers = markersFromItem(item.markers);
   return {
     FieldID: toFormString(item.FieldID),
     Name: toFormString(item.Name),
@@ -147,7 +88,6 @@ function createFormFromItem(item: FieldItem): FieldForm {
     Longitude: toFormString(item.Longitude),
     Thumbnail: toFormString(item.Thumbnail),
     ThumbnailAlt: toFormString(item.ThumbnailAlt),
-    markers: normalizedMarkers.length ? normalizedMarkers : [createMarker()],
   };
 }
 
@@ -190,52 +130,6 @@ function buildPayloadFromForm(form: FieldForm): FieldPayloadResult {
     }
     payload.Longitude = lng;
   }
-
-  const markersPayload: MarkerPayload[] = [];
-  for (let i = 0; i < form.markers.length; i++) {
-    const marker = form.markers[i];
-    const hasValues =
-      marker.icon.trim() ||
-      marker.scale.trim() ||
-      marker.posX.trim() ||
-      marker.posY.trim() ||
-      marker.posZ.trim() ||
-      marker.text.trim();
-    if (!hasValues) continue;
-
-    const markerLabel = `Marker #${i + 1}`;
-
-    const icon = marker.icon.trim();
-    if (!icon) {
-      return { error: `${markerLabel}: Icon is required.` };
-    }
-
-    const scaleValue = marker.scale.trim();
-    if (!scaleValue) {
-      return { error: `${markerLabel}: Scale is required.` };
-    }
-    const scale = Number(scaleValue);
-    if (Number.isNaN(scale)) {
-      return { error: `${markerLabel}: Scale must be a number.` };
-    }
-
-    const positionStrings = [marker.posX.trim(), marker.posY.trim(), marker.posZ.trim()];
-    if (positionStrings.some((value) => !value)) {
-      return { error: `${markerLabel}: Position requires X, Y, and Z values.` };
-    }
-    const position = positionStrings.map((value) => Number(value));
-    if (position.some((value) => Number.isNaN(value))) {
-      return { error: `${markerLabel}: Position values must be numbers.` };
-    }
-
-    const text = marker.text.trim();
-    if (!text) {
-      return { error: `${markerLabel}: Text is required.` };
-    }
-
-    markersPayload.push([icon, scale, position as [number, number, number], text]);
-  }
-  if (markersPayload.length) payload.markers = markersPayload;
 
   return { payload };
 }
@@ -310,24 +204,6 @@ export default function Admin() {
     setForm(createEmptyForm());
   }
 
-  function addMarker() {
-    setForm((prev) => ({ ...prev, markers: [...prev.markers, createMarker()] }));
-  }
-
-  function removeMarker(index: number) {
-    setForm((prev) => {
-      if (prev.markers.length <= 1) return prev;
-      return { ...prev, markers: prev.markers.filter((_, markerIndex) => markerIndex !== index) };
-    });
-  }
-
-  function updateMarker(index: number, patch: Partial<MarkerForm>) {
-    setForm((prev) => ({
-      ...prev,
-      markers: prev.markers.map((marker, markerIndex) => (markerIndex === index ? { ...marker, ...patch } : marker)),
-    }));
-  }
-
   function startEditing(item: FieldItem) {
     setErr("");
     setEditingId(item.FieldID);
@@ -340,90 +216,15 @@ export default function Admin() {
     setErr("");
   }
 
-  function addEditMarker() {
-    setEditForm((prev) => {
-      if (!prev) return prev;
-      return { ...prev, markers: [...prev.markers, createMarker()] };
-    });
-  }
-
-  function removeEditMarker(index: number) {
-    setEditForm((prev) => {
-      if (!prev) return prev;
-      if (prev.markers.length <= 1) return prev;
-      return { ...prev, markers: prev.markers.filter((_, markerIndex) => markerIndex !== index) };
-    });
-  }
-
-  function updateEditMarker(index: number, patch: Partial<MarkerForm>) {
-    setEditForm((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        markers: prev.markers.map((marker, markerIndex) => (markerIndex === index ? { ...marker, ...patch } : marker)),
-      };
-    });
-  }
-
-  function openMarkerEditor(mode: AdminMarkerMode, markerIndex: number, marker: MarkerForm, gaussianPath?: string) {
+  function openMarkerManager(fieldId: string, gaussianPath?: string) {
     const params = new URLSearchParams();
-    params.set("adminMarkerMode", mode);
-    params.set("markerIndex", String(markerIndex));
-    params.set("marker", JSON.stringify(marker));
+    params.set("fieldId", fieldId);
     const trimmedPath = gaussianPath?.trim();
     if (trimmedPath) params.set("gaussianPath", trimmedPath);
     const editorUrl = new URL("/editor", window.location.origin);
     editorUrl.search = params.toString();
     window.open(editorUrl.toString(), "_blank");
   }
-
-  // Listen for marker updates coming back from the editor tab.
-  useEffect(() => {
-    function handleEditorMessage(event: MessageEvent) {
-      if (event.origin !== window.location.origin) return;
-      const data = event.data as EditorMarkerSelectedMessage | undefined;
-      if (!data || data.type !== "EDITOR_MARKER_SELECTED") return;
-      const mode = data.adminMarkerMode;
-      if (mode !== "add" && mode !== "edit") return;
-      const markerIndex = Number(data.markerIndex);
-      if (!Number.isInteger(markerIndex) || markerIndex < 0) return;
-      const marker = data.marker ?? {};
-      const toStringValue = (value: unknown) => {
-        if (typeof value === "string") return value;
-        if (typeof value === "number" && Number.isFinite(value)) return String(value);
-        return "";
-      };
-      const sanitized: MarkerForm = {
-        icon: toStringValue((marker as MarkerForm).icon),
-        scale: toStringValue((marker as MarkerForm).scale),
-        posX: toStringValue((marker as MarkerForm).posX),
-        posY: toStringValue((marker as MarkerForm).posY),
-        posZ: toStringValue((marker as MarkerForm).posZ),
-        text: toStringValue((marker as MarkerForm).text),
-      };
-
-      if (mode === "add") {
-        setForm((prev) => {
-          if (!prev.markers[markerIndex]) return prev;
-          return {
-            ...prev,
-            markers: prev.markers.map((existing, idx) => (idx === markerIndex ? sanitized : existing)),
-          };
-        });
-      } else {
-        setEditForm((prev) => {
-          if (!prev || !prev.markers[markerIndex]) return prev;
-          return {
-            ...prev,
-            markers: prev.markers.map((existing, idx) => (idx === markerIndex ? sanitized : existing)),
-          };
-        });
-      }
-    }
-
-    window.addEventListener("message", handleEditorMessage);
-    return () => window.removeEventListener("message", handleEditorMessage);
-  }, []);
 
   async function onAdd(e?: FormEvent<HTMLFormElement>) {
     if (e) e.preventDefault();
@@ -724,106 +525,18 @@ export default function Admin() {
                               }
                             />
                           </div>
-                          <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <strong>Markers</strong>
-                              <button type="button" style={modalButtonStyle} onClick={addEditMarker}>
-                                Add Marker
-                              </button>
-                            </div>
-                            {currentEditForm.markers.map((marker, idx) => (
-                              <div
-                                key={`edit-marker-${idx}`}
-                                style={{
-                                  border: "1px solid #333",
-                                  borderRadius: 8,
-                                  padding: 12,
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  gap: 8,
-                                  background: "#0f0f0f",
-                                }}
-                              >
-                                <div
-                                  style={{
-                                    display: "flex",
-                                    justifyContent: "space-between",
-                                    alignItems: "center",
-                                    gap: 8,
-                                  }}
-                                >
-                                  <strong>Marker #{idx + 1}</strong>
-                                  <div style={{ display: "flex", gap: 8 }}>
-                                    <button
-                                      type="button"
-                                      style={placeMarkerButtonStyle}
-                                      onClick={() => openMarkerEditor("edit", idx, marker, currentEditForm.File)}
-                                    >
-                                      Place Marker
-                                    </button>
-                                    {currentEditForm.markers.length > 1 && (
-                                      <button
-                                        type="button"
-                                        style={{ ...modalButtonStyle, background: "#661818", border: "1px solid #993333" }}
-                                        onClick={() => removeEditMarker(idx)}
-                                      >
-                                        Remove
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                                <input
-                                  placeholder="Icon (e.g. assets/icons/markerIcon1.png)"
-                                  style={modalFieldStyle}
-                                  value={marker.icon}
-                                  onChange={(e) => updateEditMarker(idx, { icon: e.target.value })}
-                                />
-                                <input
-                                  placeholder="Scale (e.g. 0.1)"
-                                  type="number"
-                                  inputMode="decimal"
-                                  step="any"
-                                  style={modalFieldStyle}
-                                  value={marker.scale}
-                                  onChange={(e) => updateEditMarker(idx, { scale: e.target.value })}
-                                />
-                                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-                                  <input
-                                    placeholder="Position X"
-                                    type="number"
-                                    inputMode="decimal"
-                                    step="any"
-                                    style={modalFieldStyle}
-                                    value={marker.posX}
-                                    onChange={(e) => updateEditMarker(idx, { posX: e.target.value })}
-                                  />
-                                  <input
-                                    placeholder="Position Y"
-                                    type="number"
-                                    inputMode="decimal"
-                                    step="any"
-                                    style={modalFieldStyle}
-                                    value={marker.posY}
-                                    onChange={(e) => updateEditMarker(idx, { posY: e.target.value })}
-                                  />
-                                  <input
-                                    placeholder="Position Z"
-                                    type="number"
-                                    inputMode="decimal"
-                                    step="any"
-                                    style={modalFieldStyle}
-                                    value={marker.posZ}
-                                    onChange={(e) => updateEditMarker(idx, { posZ: e.target.value })}
-                                  />
-                                </div>
-                                <textarea
-                                  placeholder="Marker text/description"
-                                  style={{ ...modalTextareaStyle, minHeight: 60 }}
-                                  value={marker.text}
-                                  onChange={(e) => updateEditMarker(idx, { text: e.target.value })}
-                                />
-                              </div>
-                            ))}
+                          <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+                            <strong>Markers</strong>
+                            <p style={{ margin: 0, color: "#bbb" }}>
+                              Use the 3D editor to manage this field&apos;s markers.
+                            </p>
+                            <button
+                              type="button"
+                              style={modalButtonStyle}
+                              onClick={() => openMarkerManager(currentEditForm.FieldID, currentEditForm.File)}
+                            >
+                              Manage Markers
+                            </button>
                           </div>
                         </>
                       ) : (
@@ -987,107 +700,9 @@ export default function Admin() {
                 value={form.Description}
                 onChange={(e) => setForm((prev) => ({ ...prev, Description: e.target.value }))}
               />
-              <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <h3 style={{ margin: 0 }}>Markers</h3>
-                  <button type="button" style={modalButtonStyle} onClick={addMarker}>
-                    Add Marker
-                  </button>
-                </div>
-                {form.markers.map((marker, idx) => (
-                  <div
-                    key={`marker-${idx}`}
-                    style={{
-                      border: "1px solid #333",
-                      borderRadius: 8,
-                      padding: 12,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 8,
-                      background: "#0f0f0f",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: 8,
-                      }}
-                    >
-                      <strong>Marker #{idx + 1}</strong>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <button
-                          type="button"
-                          style={placeMarkerButtonStyle}
-                          onClick={() => openMarkerEditor("add", idx, marker, form.File)}
-                        >
-                          Place Marker
-                        </button>
-                        {form.markers.length > 1 && (
-                          <button
-                            type="button"
-                            style={{ ...modalButtonStyle, background: "#661818", border: "1px solid #993333" }}
-                            onClick={() => removeMarker(idx)}
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <input
-                      placeholder="Icon (e.g. assets/icons/markerIcon1.png)"
-                      style={modalFieldStyle}
-                      value={marker.icon}
-                      onChange={(e) => updateMarker(idx, { icon: e.target.value })}
-                    />
-                    <input
-                      placeholder="Scale (e.g. 0.1)"
-                      type="number"
-                      inputMode="decimal"
-                      step="any"
-                      style={modalFieldStyle}
-                      value={marker.scale}
-                      onChange={(e) => updateMarker(idx, { scale: e.target.value })}
-                    />
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
-                      <input
-                        placeholder="Position X"
-                        type="number"
-                        inputMode="decimal"
-                        step="any"
-                        style={modalFieldStyle}
-                        value={marker.posX}
-                        onChange={(e) => updateMarker(idx, { posX: e.target.value })}
-                      />
-                      <input
-                        placeholder="Position Y"
-                        type="number"
-                        inputMode="decimal"
-                        step="any"
-                        style={modalFieldStyle}
-                        value={marker.posY}
-                        onChange={(e) => updateMarker(idx, { posY: e.target.value })}
-                      />
-                      <input
-                        placeholder="Position Z"
-                        type="number"
-                        inputMode="decimal"
-                        step="any"
-                        style={modalFieldStyle}
-                        value={marker.posZ}
-                        onChange={(e) => updateMarker(idx, { posZ: e.target.value })}
-                      />
-                    </div>
-                    <textarea
-                      placeholder="Marker text/description"
-                      style={{ ...modalTextareaStyle, minHeight: 60 }}
-                      value={marker.text}
-                      onChange={(e) => updateMarker(idx, { text: e.target.value })}
-                    />
-                  </div>
-                ))}
-              </div>
+              <p style={{ gridColumn: "1 / -1", margin: "8px 0 0", color: "#bbb" }}>
+                Markers can be added from the editor after creating the field.
+              </p>
               <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "flex-end", gap: 8 }}>
                 <button type="button" style={modalButtonStyle} onClick={() => setIsModalOpen(false)}>
                   Cancel

@@ -4,6 +4,8 @@ import * as THREE from "three";
 import { ThreeApp } from "./three/ThreeApp";
 import type { MarkerInput } from "./three/WorldMarkers";
 import { awsClient } from "./lib/awsClient";
+import { listFields, updateFieldMarkers } from "./adminApi";
+import type { Field as AdminField, MarkerPayload } from "./adminApi";
 import "./index.css";
 
 const PLACEMENT_DISTANCE_DEFAULT = 1;
@@ -15,6 +17,8 @@ const MARKER_ICON_OPTIONS: { value: string; label: string }[] = [
   { value: "/assets/icons/markerIcon3.png", label: "Marker Icon 3" },
   { value: "/assets/icons/markerIcon4.png", label: "Marker Icon 4" },
 ];
+
+const DEFAULT_MARKER_ICON = MARKER_ICON_OPTIONS[0].value;
 
 type EditorMarker = {
   position: [number, number, number];
@@ -29,16 +33,38 @@ type Pin = {
   markers?: Array<Record<string, unknown>>;
 };
 
-type AdminMarkerMode = "add" | "edit";
+function backendMarkersToEditorMarkers(raw: MarkerPayload[] | undefined): EditorMarker[] {
+  if (!raw || !Array.isArray(raw)) return [];
+  return raw
+    .map((entry) => {
+      if (!Array.isArray(entry) || entry.length < 4) return null;
+      const [icon, scale, position, text] = entry;
+      if (!Array.isArray(position) || position.length < 3) return null;
+      if (position.some((value) => typeof value !== "number" || !Number.isFinite(value))) return null;
+      const [x, y, z] = position as [number, number, number];
+      return {
+        position: [x, y, z],
+        radius: typeof scale === "number" && Number.isFinite(scale) ? scale : undefined,
+        label: typeof text === "string" ? text : "",
+        icon: typeof icon === "string" ? icon : undefined,
+      };
+    })
+    .filter(Boolean) as EditorMarker[];
+}
 
-type MarkerFormPayload = {
-  icon: string;
-  scale: string;
-  posX: string;
-  posY: string;
-  posZ: string;
-  text: string;
-};
+function editorMarkersToBackend(markers: EditorMarker[]): MarkerPayload[] {
+  return markers.map((marker) => {
+    const [xRaw, yRaw, zRaw] = marker.position;
+    const normalizedPosition: [number, number, number] = [
+      Number.isFinite(xRaw) ? xRaw : 0,
+      Number.isFinite(yRaw) ? yRaw : 0,
+      Number.isFinite(zRaw) ? zRaw : 0,
+    ];
+    const radius = typeof marker.radius === "number" && Number.isFinite(marker.radius) ? marker.radius : 0.25;
+    const icon = marker.icon && marker.icon.trim() ? marker.icon : DEFAULT_MARKER_ICON;
+    return [icon, radius, normalizedPosition, marker.label ?? ""];
+  });
+}
 
 const resolveAssetUrl = (raw: string) => {
   if (/^(https?:|blob:|data:)/i.test(raw)) return raw;
@@ -135,35 +161,15 @@ function parseMarkerFormParam(raw: string | null): EditorMarker | null {
   }
 }
 
-function editorMarkerToFormPayload(marker: EditorMarker): MarkerFormPayload {
-  const toStringValue = (value: number | undefined) =>
-    typeof value === "number" && Number.isFinite(value) ? String(value) : "";
-  const [x, y, z] = marker.position;
-  return {
-    icon: marker.icon ?? "",
-    scale: toStringValue(marker.radius),
-    posX: toStringValue(x),
-    posY: toStringValue(y),
-    posZ: toStringValue(z),
-    text: marker.label ?? "",
-  };
-}
-
 export default function Editor() {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const appRef = useRef<ThreeApp | null>(null);
   const textureCacheRef = useRef<Map<string, THREE.Texture>>(new Map());
   const [searchParams] = useSearchParams();
-  const adminMarkerModeParam = searchParams.get("adminMarkerMode");
-  const adminMarkerMode: AdminMarkerMode | null =
-    adminMarkerModeParam === "add" || adminMarkerModeParam === "edit" ? adminMarkerModeParam : null;
-  const adminMarkerIndexParam = searchParams.get("markerIndex");
-  const adminMarkerIndexValue = adminMarkerIndexParam !== null ? Number(adminMarkerIndexParam) : null;
-  const adminMarkerIndex =
-    adminMarkerIndexValue !== null && Number.isInteger(adminMarkerIndexValue) && adminMarkerIndexValue >= 0
-      ? adminMarkerIndexValue
-      : null;
-  const isAdminSession = Boolean(adminMarkerMode && adminMarkerIndex !== null);
+  const fieldIdParam = searchParams.get("fieldId");
+  const fieldId = fieldIdParam ? fieldIdParam.trim() : "";
+  const isFieldManagement = Boolean(fieldId);
+  const gaussianPathParam = searchParams.get("gaussianPath") || searchParams.get("path");
 
   const [pins, setPins] = useState<Pin[]>([]);
   const [selectedPinIndex, setSelectedPinIndex] = useState<number>(0);
@@ -173,6 +179,12 @@ export default function Editor() {
   const [selectedMarkerIndex, setSelectedMarkerIndex] = useState<number | null>(null);
   const [placementIconIndex, setPlacementIconIndex] = useState(0);
   const [placementRadius, setPlacementRadius] = useState(0.1);
+  const [placementLabel, setPlacementLabel] = useState("New marker");
+  const [managedField, setManagedField] = useState<AdminField | null>(null);
+  const [fieldStatus, setFieldStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [fieldError, setFieldError] = useState("");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
+  const [saveMessage, setSaveMessage] = useState("");
 
   const syncMarkersToApp = useCallback(() => {
     if (!appRef.current) return;
@@ -191,12 +203,25 @@ export default function Editor() {
     appRef.current.setWorldMarkers(input, preview, selectedIndex);
   }, [markers, mode, placementRadius, placementIconIndex, selectedMarkerIndex]);
 
+  const placeMarkerAtCurrentPreview = useCallback(() => {
+    if (!appRef.current) return;
+    const pos = appRef.current.getPlacementPosition();
+    const iconUrl = MARKER_ICON_OPTIONS[placementIconIndex]?.value ?? MARKER_ICON_OPTIONS[0].value;
+    const newMarker: EditorMarker = {
+      position: [pos.x, pos.y, pos.z],
+      radius: placementRadius,
+      label: placementLabel || "New marker",
+      icon: iconUrl,
+    };
+    setMarkers((prev) => [...prev, newMarker]);
+  }, [placementIconIndex, placementRadius, placementLabel]);
+
   useEffect(() => {
     if (!wrapRef.current) return;
     const app = new ThreeApp(wrapRef.current);
     appRef.current = app;
 
-    const pathFromUrl = searchParams.get("gaussianPath") || searchParams.get("path");
+    const pathFromUrl = gaussianPathParam;
     const markersParam = searchParams.get("markers");
     if (pathFromUrl) {
       const resolved =
@@ -207,14 +232,14 @@ export default function Editor() {
           : new URL(pathFromUrl, window.location.href).href;
       app.loadGaussianScene(resolved);
     }
-    if (markersParam) {
+    if (!isFieldManagement && markersParam) {
       try {
         const parsed = JSON.parse(markersParam) as Array<Record<string, unknown>>;
         setMarkers(parseApiMarkers(parsed));
       } catch {
         // ignore
       }
-    } else {
+    } else if (!isFieldManagement) {
       const markerParam = searchParams.get("marker");
       const singleMarker = parseMarkerFormParam(markerParam);
       if (singleMarker) {
@@ -227,7 +252,65 @@ export default function Editor() {
       app.dispose();
       appRef.current = null;
     };
-  }, [searchParams]);
+  }, [searchParams, gaussianPathParam, isFieldManagement]);
+
+  useEffect(() => {
+    if (!isFieldManagement || !fieldId) {
+      setManagedField(null);
+      setFieldStatus("idle");
+      setFieldError("");
+      return;
+    }
+
+    let cancelled = false;
+    setFieldStatus("loading");
+    setFieldError("");
+
+    (async () => {
+      try {
+        const data = await listFields();
+        if (cancelled) return;
+        const items = (data.items ?? []) as AdminField[];
+        const field = items.find((item) => item.FieldID === fieldId);
+        if (!field) {
+          setFieldStatus("error");
+          setFieldError(`Field "${fieldId}" not found.`);
+          return;
+        }
+        setManagedField(field);
+        setFieldStatus("ready");
+        const backendMarkers = Array.isArray(field.markers) ? (field.markers as MarkerPayload[]) : [];
+        const nextMarkers = backendMarkersToEditorMarkers(backendMarkers);
+        setMarkers(nextMarkers);
+        setSelectedMarkerIndex(nextMarkers.length ? 0 : null);
+        if (!gaussianPathParam) {
+          const filePath = field.File?.trim();
+          if (filePath) {
+            const resolved =
+              filePath.startsWith("/") || /^(https?:|blob:|data:)/i.test(filePath)
+                ? filePath.startsWith("/")
+                  ? new URL(filePath, window.location.origin).href
+                  : filePath
+                : new URL(filePath, window.location.href).href;
+            appRef.current?.loadGaussianScene(resolved);
+          }
+        }
+      } catch (error: any) {
+        if (cancelled) return;
+        setFieldStatus("error");
+        setFieldError(error?.message ? String(error.message) : String(error));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fieldId, gaussianPathParam, isFieldManagement]);
+
+  useEffect(() => {
+    setSaveStatus("idle");
+    setSaveMessage("");
+  }, [fieldId]);
 
   useEffect(() => {
     syncMarkersToApp();
@@ -243,15 +326,7 @@ export default function Editor() {
       appRef.current.setPlacementDistance(placementDistance);
       appRef.current.setEditorCallbacks({
         onPlaceClick: () => {
-          const pos = appRef.current!.getPlacementPosition();
-          const iconUrl = MARKER_ICON_OPTIONS[placementIconIndex]?.value ?? MARKER_ICON_OPTIONS[0].value;
-          const newMarker: EditorMarker = {
-            position: [pos.x, pos.y, pos.z],
-            radius: placementRadius,
-            label: "New marker",
-            icon: iconUrl,
-          };
-          setMarkers((prev) => [...prev, newMarker]);
+          placeMarkerAtCurrentPreview();
         },
       });
     } else {
@@ -260,7 +335,7 @@ export default function Editor() {
         onMarkerClick: (index) => setSelectedMarkerIndex(index),
       });
     }
-  }, [mode, placementDistance, placementIconIndex, placementRadius, markers]);
+  }, [mode, placementDistance, placeMarkerAtCurrentPreview]);
 
   useEffect(() => {
     const next = pins.length;
@@ -268,8 +343,9 @@ export default function Editor() {
   }, [pins.length, selectedPinIndex]);
 
   useEffect(() => {
+    if (isFieldManagement) return;
     if (pins.length === 0) return;
-    if (searchParams.get("gaussianPath") || searchParams.get("path")) return;
+    if (gaussianPathParam) return;
     const pin = pins[selectedPinIndex];
     if (!pin?.path) return;
     const resolved =
@@ -281,7 +357,7 @@ export default function Editor() {
     setMarkers(parseApiMarkers(pin.markers ?? []));
     setSelectedMarkerIndex(null);
     appRef.current?.loadGaussianScene(resolved);
-  }, [pins, selectedPinIndex, searchParams]);
+  }, [pins, selectedPinIndex, gaussianPathParam, isFieldManagement]);
 
   useEffect(() => {
     awsClient
@@ -301,61 +377,20 @@ export default function Editor() {
       .catch((err) => console.error("Failed to load pins for editor", err));
   }, [searchParams]);
 
-  const handleAdminPlaceMarker = useCallback(() => {
-    if (!adminMarkerMode || adminMarkerIndex === null) return;
-    let markerToSend: EditorMarker | null = null;
-    if (selectedMarkerIndex !== null && markers[selectedMarkerIndex]) {
-      markerToSend = markers[selectedMarkerIndex];
-    } else if (markers.length > 0) {
-      markerToSend = markers[markers.length - 1];
-    } else if (mode === "place" && appRef.current) {
-      const pos = appRef.current.getPlacementPosition();
-      const iconUrl = MARKER_ICON_OPTIONS[placementIconIndex]?.value ?? MARKER_ICON_OPTIONS[0].value;
-      markerToSend = {
-        position: [pos.x, pos.y, pos.z],
-        radius: placementRadius,
-        label: "New marker",
-        icon: iconUrl,
-      };
-    }
-
-    if (!markerToSend) {
-      window.alert("Select or place a marker first.");
-      return;
-    }
-
-    if (!window.opener) {
-      window.alert("Admin tab not available.");
-      return;
-    }
-
-    const markerFormPayload = editorMarkerToFormPayload(markerToSend);
-
-    // Send the selected marker back to the admin tab so the form can update immediately.
-    window.opener.postMessage(
-      {
-        type: "EDITOR_MARKER_SELECTED",
-        adminMarkerMode,
-        markerIndex: adminMarkerIndex,
-        marker: markerFormPayload,
-      },
-      window.location.origin
-    );
-
+  const handleSaveMarkers = useCallback(async () => {
+    if (!fieldId) return;
+    setSaveStatus("saving");
+    setSaveMessage("");
     try {
-      window.close();
-    } catch {
-      // Ignore if the window cannot be closed (e.g., opened manually).
+      const payload = editorMarkersToBackend(markers);
+      await updateFieldMarkers(fieldId, payload);
+      setSaveStatus("success");
+      setSaveMessage("Markers saved.");
+    } catch (error: any) {
+      setSaveStatus("error");
+      setSaveMessage(error?.message ? String(error.message) : "Failed to save markers.");
     }
-  }, [
-    adminMarkerMode,
-    adminMarkerIndex,
-    markers,
-    mode,
-    placementIconIndex,
-    placementRadius,
-    selectedMarkerIndex,
-  ]);
+  }, [fieldId, markers]);
 
   const selectedMarker = selectedMarkerIndex !== null ? markers[selectedMarkerIndex] : null;
 
@@ -376,27 +411,54 @@ export default function Editor() {
           gap: "1rem",
         }}
       >    
-        <h3 style={{ margin: 0, fontSize: "1rem", color: "#e6edf3" }}>Scene</h3>
-        {pins.length > 0 && (
-        <select
-          value={selectedPinIndex}
-          onChange={(e) => setSelectedPinIndex(Number(e.target.value))}
-          style={{
-            width: "100%",
-            padding: "0.5rem 0.75rem",
-            borderRadius: 6,
-            border: "1px solid rgba(255,255,255,0.2)",
-            background: "rgba(0,0,0,0.3)",
-            color: "#e6edf3",
-            fontSize: "0.875rem",
-          }}
-        >
-          {pins.map((pin, i) => (
-            <option key={i} value={i}>
-              {pin.title || `Location ${i + 1}`}
-            </option>
-          ))}
-        </select>
+        {isFieldManagement ? (
+          <>
+            <h3 style={{ margin: 0, fontSize: "1rem", color: "#e6edf3" }}>Managing Field</h3>
+            <div
+              style={{
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: 8,
+                padding: "0.75rem",
+                background: "rgba(0,0,0,0.25)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.25rem",
+              }}
+            >
+              <strong style={{ color: "#fff", fontSize: "0.95rem" }}>
+                {managedField?.Name || "Untitled Field"}
+              </strong>
+              <span style={{ fontSize: "0.8rem", color: "#b8c2d1" }}>Field ID: {fieldId}</span>
+              <span style={{ fontSize: "0.8rem", color: "#9aa4b5" }}>
+                Scene path: {gaussianPathParam || managedField?.File || "Use custom path"}
+              </span>
+            </div>
+          </>
+        ) : (
+          <>
+            <h3 style={{ margin: 0, fontSize: "1rem", color: "#e6edf3" }}>Scene</h3>
+            {pins.length > 0 && (
+              <select
+                value={selectedPinIndex}
+                onChange={(e) => setSelectedPinIndex(Number(e.target.value))}
+                style={{
+                  width: "100%",
+                  padding: "0.5rem 0.75rem",
+                  borderRadius: 6,
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  background: "rgba(0,0,0,0.3)",
+                  color: "#e6edf3",
+                  fontSize: "0.875rem",
+                }}
+              >
+                {pins.map((pin, i) => (
+                  <option key={i} value={i}>
+                    {pin.title || `Location ${i + 1}`}
+                  </option>
+                ))}
+              </select>
+            )}
+          </>
         )}
 
         <h3 style={{ margin: 0, fontSize: "1rem", color: "#e6edf3" }}>Mode</h3>
@@ -439,6 +501,24 @@ export default function Editor() {
           </div>
           <div>
             <h3 style={{ margin: 0, fontSize: "0.9rem", color: "#e6edf3" }}>Preview style</h3>
+            <label style={{ fontSize: "0.8rem", color: "#9aa4b5" }}>Label</label>
+            <input
+              type="text"
+              value={placementLabel}
+              onChange={(e) => setPlacementLabel(e.target.value)}
+              placeholder="New marker"
+              style={{
+                width: "100%",
+                padding: "0.4rem 0.6rem",
+                marginTop: "0.25rem",
+                marginBottom: "0.5rem",
+                borderRadius: 6,
+                border: "1px solid rgba(255,255,255,0.2)",
+                background: "rgba(0,0,0,0.3)",
+                color: "#e6edf3",
+                fontSize: "0.875rem",
+              }}
+            />
             <label style={{ fontSize: "0.8rem", color: "#9aa4b5" }}>Icon</label>
             <select
               value={placementIconIndex}
@@ -644,23 +724,57 @@ export default function Editor() {
           </div>
         )}
 
-        {isAdminSession && (
-          <button
-            type="button"
-            onClick={handleAdminPlaceMarker}
-            style={{
-              marginTop: "auto",
-              padding: "0.55rem 0.75rem",
-              borderRadius: 6,
-              border: "1px solid rgba(34,197,94,0.6)",
-              background: "rgba(34,197,94,0.18)",
-              color: "#bbf7d0",
-              fontSize: "0.95rem",
-              cursor: "pointer",
-            }}
-          >
-            Place Marker
-          </button>
+        {isFieldManagement && (
+          <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            {mode === "place" && (
+              <button
+                type="button"
+                onClick={placeMarkerAtCurrentPreview}
+                style={{
+                  padding: "0.5rem 0.75rem",
+                  borderRadius: 6,
+                  border: "1px solid rgba(59,130,246,0.5)",
+                  background: "rgba(59,130,246,0.2)",
+                  color: "#bfdbfe",
+                  fontSize: "0.9rem",
+                  cursor: "pointer",
+                }}
+              >
+                Place Marker
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleSaveMarkers}
+              disabled={fieldStatus !== "ready" || saveStatus === "saving"}
+              style={{
+                padding: "0.55rem 0.75rem",
+                borderRadius: 6,
+                border: "1px solid rgba(34,197,94,0.6)",
+                background:
+                  fieldStatus !== "ready" || saveStatus === "saving"
+                    ? "rgba(34,197,94,0.15)"
+                    : "rgba(34,197,94,0.3)",
+                color: "#bbf7d0",
+                fontSize: "0.95rem",
+                cursor: fieldStatus !== "ready" || saveStatus === "saving" ? "not-allowed" : "pointer",
+              }}
+            >
+              {saveStatus === "saving" ? "Saving..." : "Save Markers"}
+            </button>
+            {fieldStatus === "loading" && (
+              <span style={{ fontSize: "0.8rem", color: "#b8c2d1" }}>Loading field markers...</span>
+            )}
+            {fieldStatus === "error" && (
+              <span style={{ fontSize: "0.8rem", color: "#fca5a5" }}>{fieldError || "Unable to load field."}</span>
+            )}
+            {saveStatus === "success" && (
+              <span style={{ fontSize: "0.8rem", color: "#86efac" }}>{saveMessage || "Markers saved."}</span>
+            )}
+            {saveStatus === "error" && (
+              <span style={{ fontSize: "0.8rem", color: "#fca5a5" }}>{saveMessage || "Failed to save markers."}</span>
+            )}
+          </div>
         )}
       </aside>
     </div>

@@ -14,6 +14,8 @@ export type Field = {
   markers?: unknown;
 };
 
+export type MarkerPayload = [string, number, [number, number, number], string];
+
 export type CreateFieldPayload = Field;
 
 // For PUT updates, you usually want to send only what changed.
@@ -89,6 +91,10 @@ export async function updateField(fieldId: string, payload: UpdateFieldPayload) 
       FieldID: fieldId, // force consistency with the URL-less route
     }),
   });
+}
+
+export async function updateFieldMarkers(fieldId: string, markers: MarkerPayload[]) {
+  return updateField(fieldId, { markers });
 }
 
 /**
