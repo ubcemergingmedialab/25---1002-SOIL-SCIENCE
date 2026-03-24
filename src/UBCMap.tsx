@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import { awsClient } from "./lib/awsClient";
 import Viewer from "./Viewer";
@@ -185,6 +185,53 @@ export default function UBCMap({
     .map((pin, index) => ({ pin, index }))
     .filter(({ pin }) => (pin.title || "").toLowerCase().includes(searchQuery.toLowerCase()));
 
+  const fetchPins = useCallback(async () => {
+    const res = await awsClient.fetch(
+      `${import.meta.env.VITE_API_URL}/pins`,
+      { method: "GET" }
+    );
+
+    if (!res.ok) throw new Error(`Pins fetch failed: ${res.status}`);
+
+    const data = (await res.json()) as Array<{
+      FieldID?: string;
+      title?: string;
+      position?: { lat: number; lng: number };
+      path?: string;
+      description?: string;
+      thumbnail?: string;
+      thumbnailAlt?: string;
+      start_pos?: unknown;
+      markers?: Array<Record<string, unknown>>;
+    }>;
+
+    console.log("[UBCMap] /pins response", {
+      count: Array.isArray(data) ? data.length : 0,
+      idsOrTitles: (data ?? []).map((p) => p.FieldID ?? p.title ?? "(untitled)"),
+    });
+
+    return data
+      .map((p) => {
+        const latRaw = p?.position?.lat;
+        const lngRaw = p?.position?.lng;
+        const lat = typeof latRaw === "number" ? latRaw : Number(latRaw);
+        const lng = typeof lngRaw === "number" ? lngRaw : Number(lngRaw);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+        return {
+          title: p.title ?? "",
+          position: { lat, lng },
+          path: p.path ?? "",
+          description: p.description ?? "",
+          thumbnail: p.thumbnail ?? "",
+          thumbnailAlt: p.thumbnailAlt ?? "",
+          start_pos: p.start_pos,
+          markers: p.markers ?? [],
+        };
+      })
+      .filter(Boolean) as Pin[];
+  }, []);
+
   useEffect(() => {
     selectedPinIndexRef.current = selectedPinIndex;
   }, [selectedPinIndex]);
@@ -194,56 +241,8 @@ export default function UBCMap({
 
     (async () => {
       try {
-        const res = await awsClient.fetch(
-          `${import.meta.env.VITE_API_URL}/pins`,
-          { method: "GET" }
-        );
-
-        if (!res.ok) throw new Error(`Pins fetch failed: ${res.status}`);
-
-        const data = (await res.json()) as Array<{
-          FieldID?: string;
-          title?: string;
-          position?: { lat: number; lng: number };
-          path?: string;
-          description?: string;
-          thumbnail?: string;
-          thumbnailAlt?: string;
-          start_pos?: unknown;
-          markers?: Array<Record<string, unknown>>;
-        }>;
-
+        const nextPins = await fetchPins();
         if (cancelled) return;
-
-        console.log(
-          "[UBCMap] /pins response",
-          {
-            count: Array.isArray(data) ? data.length : 0,
-            idsOrTitles: (data ?? []).map((p) => p.FieldID ?? p.title ?? "(untitled)"),
-          }
-        );
-
-        const nextPins: Pin[] = data
-          .map((p) => {
-            const latRaw = p?.position?.lat;
-            const lngRaw = p?.position?.lng;
-            const lat = typeof latRaw === "number" ? latRaw : Number(latRaw);
-            const lng = typeof lngRaw === "number" ? lngRaw : Number(lngRaw);
-            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
-
-            return {
-              title: p.title ?? "",
-              position: { lat, lng },
-              path: p.path ?? "",
-              description: p.description ?? "",
-              thumbnail: p.thumbnail ?? "",
-              thumbnailAlt: p.thumbnailAlt ?? "",
-              start_pos: p.start_pos,
-              markers: p.markers ?? [],
-            };
-          })
-          .filter(Boolean) as Pin[];
-
         setPins(nextPins);
       } catch (err) {
         if (!cancelled) console.error("Failed to load pins", err);
@@ -253,7 +252,36 @@ export default function UBCMap({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [fetchPins]);
+
+  useEffect(() => {
+    const refreshPins = async () => {
+      try {
+        const nextPins = await fetchPins();
+        setPins(nextPins);
+      } catch (err) {
+        console.error("Failed to refresh pins", err);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshPins();
+      }
+    };
+
+    const handleFocus = () => {
+      void refreshPins();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [fetchPins]);
 
   useEffect(() => {
     if (!mapLoaded || !containerRef.current) return;
@@ -308,7 +336,15 @@ export default function UBCMap({
 
       const content = buildPopupContent(
         pin,
-        () => openViewer(pin.path, pin.markers, pin.start_pos),
+        () => {
+          console.log("[UBCMap start_pos debug] opening viewer from pin", {
+            title: pin.title,
+            path: pin.path,
+            start_pos: pin.start_pos,
+            markersCount: Array.isArray(pin.markers) ? pin.markers.length : 0,
+          });
+          openViewer(pin.path, pin.markers, pin.start_pos);
+        },
         () => marker.closePopup()
       );
 

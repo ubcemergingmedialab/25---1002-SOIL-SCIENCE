@@ -99,6 +99,13 @@ export default function Viewer({ gaussianPath, markers, startPos, onBack, embedd
       }
     })();
     const parsedStartPos = parseStartPos(startPosParam);
+    console.log("[Viewer start_pos debug] resolved viewer start position", {
+      gaussianPath: raw,
+      startPosProp: startPos,
+      startPosParam,
+      parsedStartPos,
+      markersCount: Array.isArray(markers) ? markers.length : markerParam ? parseMarkers(markerParam).length : 0,
+    });
 
     app.setWorldAxesPosition(parsedStartPos ?? [0, 0, 0]);
     app.setWorldAxesVisible(false);

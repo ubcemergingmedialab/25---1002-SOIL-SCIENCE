@@ -5,7 +5,7 @@ import { ThreeApp } from "./three/ThreeApp";
 import type { ControlMode } from "./three/ScreenSpace";
 import type { MarkerInput } from "./three/WorldMarkers";
 import { awsClient } from "./lib/awsClient";
-import { listFields, updateField } from "./adminApi";
+import { updateField } from "./adminApi";
 import type { Field as AdminField, MarkerPayload } from "./adminApi";
 import "./index.css";
 
@@ -197,6 +197,28 @@ function parseMarkerFormParam(raw: string | null): EditorMarker | null {
   }
 }
 
+async function fetchFieldById(fieldId: string): Promise<AdminField | null> {
+  const baseUrl = import.meta.env.VITE_API_URL as string;
+  const res = await awsClient.fetch(`${baseUrl}/fields/${encodeURIComponent(fieldId)}`, {
+    method: "GET",
+  });
+
+  if (res.status === 404) return null;
+
+  const raw = await res.text();
+  if (!res.ok) {
+    throw new Error(`${res.status} ${res.statusText}: ${raw || "Failed to load field."}`);
+  }
+
+  const field = raw ? (JSON.parse(raw) as AdminField) : null;
+  console.log("[Editor start_pos debug] fetched field", {
+    fieldId,
+    start_pos: field?.start_pos,
+    markersCount: Array.isArray(field?.markers) ? field.markers.length : 0,
+  });
+  return field;
+}
+
 export default function Editor() {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const appRef = useRef<ThreeApp | null>(null);
@@ -313,10 +335,8 @@ export default function Editor() {
 
     (async () => {
       try {
-        const data = await listFields();
+        const field = await fetchFieldById(fieldId);
         if (cancelled) return;
-        const items = (data.items ?? []) as AdminField[];
-        const field = items.find((item) => item.FieldID === fieldId);
         if (!field) {
           setFieldStatus("error");
           setFieldError(`Field "${fieldId}" not found.`);
@@ -420,6 +440,10 @@ export default function Editor() {
       if (editTarget === "interest") {
         appRef.current.setMarkerEditing(null);
         appRef.current.setInterestPointEditing(true, (position) => {
+          console.log("[Editor start_pos debug] interest point moved", {
+            fieldId,
+            position,
+          });
           setAxisStartPos(position);
         });
       } else {
@@ -495,40 +519,80 @@ export default function Editor() {
   }, [searchParams]);
 
   const handleSaveMarkers = useCallback(async () => {
-    if (!fieldId) return;
+    console.log("[Editor start_pos debug] save handler invoked", {
+      fieldId,
+      fieldStatus,
+      saveStatus,
+      axisStartPos,
+      markersCount: markers.length,
+    });
+    if (!fieldId) {
+      console.warn("[Editor start_pos debug] save aborted: missing fieldId");
+      return;
+    }
     setSaveStatus("saving");
     setSaveMessage("");
     try {
       const markerPayload = editorMarkersToBackend(markers);
       const nextStartPos = axisStartPos ?? [0, 0, 0];
+      const startPosPayload = {
+        x: roundCoordinate(nextStartPos[0]),
+        y: roundCoordinate(nextStartPos[1]),
+        z: roundCoordinate(nextStartPos[2]),
+      };
+      console.log("[Editor start_pos debug] saving field", {
+        fieldId,
+        start_pos: startPosPayload,
+        markersCount: markerPayload.length,
+      });
       await updateField(fieldId, {
         markers: markerPayload,
-        start_pos: {
-          x: roundCoordinate(nextStartPos[0]),
-          y: roundCoordinate(nextStartPos[1]),
-          z: roundCoordinate(nextStartPos[2]),
-        },
+        start_pos: startPosPayload,
       });
+      console.log("[Editor start_pos debug] save request completed", { fieldId });
+      const refreshedField = await fetchFieldById(fieldId);
+      const persistedStartPos = parseStartPos(refreshedField?.start_pos);
+      const persistedMarkers = Array.isArray(refreshedField?.markers)
+        ? backendMarkersToEditorMarkers(refreshedField.markers as MarkerPayload[])
+        : markerPayload.map((entry) => ({
+            icon: entry[0],
+            radius: entry[1],
+            position: entry[2],
+            label: entry[3],
+          }));
+      console.log("[Editor start_pos debug] refetched after save", {
+        fieldId,
+        expectedStartPos: startPosPayload,
+        returnedStartPos: refreshedField?.start_pos,
+        parsedReturnedStartPos: persistedStartPos,
+      });
+      if (
+        !persistedStartPos ||
+        persistedStartPos[0] !== startPosPayload.x ||
+        persistedStartPos[1] !== startPosPayload.y ||
+        persistedStartPos[2] !== startPosPayload.z
+      ) {
+        console.warn("[Editor start_pos debug] persisted start_pos does not match saved value", {
+          fieldId,
+          expectedStartPos: startPosPayload,
+          returnedStartPos: refreshedField?.start_pos,
+          parsedReturnedStartPos: persistedStartPos,
+        });
+      }
+
+      if (refreshedField) {
+        setManagedField(refreshedField);
+      }
+      setAxisStartPos(persistedStartPos ?? nextStartPos);
+      setMarkers(persistedMarkers);
       setSaveStatus("success");
       setSaveMessage("Saved.");
-      setManagedField((prev) =>
-        prev
-          ? {
-              ...prev,
-              markers: markerPayload,
-              start_pos: {
-                x: roundCoordinate(nextStartPos[0]),
-                y: roundCoordinate(nextStartPos[1]),
-                z: roundCoordinate(nextStartPos[2]),
-              },
-            }
-          : prev
-      );
     } catch (error: any) {
+      console.error("[Editor start_pos debug] save failed", error);
       setSaveStatus("error");
       setSaveMessage(error?.message ? String(error.message) : "Failed to save.");
     }
-  }, [fieldId, markers, axisStartPos]);
+  }, [fieldId, fieldStatus, saveStatus, markers, axisStartPos]);
 
   const selectedMarker = selectedMarkerIndex !== null ? markers[selectedMarkerIndex] : null;
 
