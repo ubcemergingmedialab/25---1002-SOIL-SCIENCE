@@ -290,11 +290,13 @@ export class ThreeApp {
 
       // Markers (and label) at full resolution
       this.markers.render(this.renderer, this.camera);
+      this.markers.renderOverlay(this.renderer, this.camera);
     } else {
       // Full quality path. everything to canvas
       this.skybox.render(this.renderer, this.camera);
       this.markers.render(this.renderer, this.camera);
       this.gaussian.render();
+      this.markers.renderOverlay(this.renderer, this.camera);
     }
   }
 
