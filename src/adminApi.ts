@@ -26,7 +26,7 @@ export type UpdateFieldPayload = Partial<Omit<Field, "FieldID">> & {
 
 async function authHeader() {
   const session = await fetchAuthSession();
-  const token = session.tokens?.accessToken?.toString();
+  const token = session.tokens?.idToken?.toString();
   if (!token) throw new Error("Not authenticated");
   return { Authorization: `Bearer ${token}` };
 }
