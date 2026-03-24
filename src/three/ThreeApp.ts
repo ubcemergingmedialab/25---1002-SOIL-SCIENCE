@@ -197,7 +197,7 @@ export class ThreeApp {
       : [this.worldAxes.material];
     for (const material of axisMaterials) {
       if ("linewidth" in material) {
-        (material as THREE.Material & { linewidth?: number }).linewidth = 3;
+        (material as THREE.Material & { linewidth?: number }).linewidth = 5;
       }
     }
     this.worldAxesScene.add(this.worldAxes);

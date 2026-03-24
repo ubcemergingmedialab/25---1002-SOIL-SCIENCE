@@ -392,6 +392,7 @@ export default function Editor() {
 
   useEffect(() => {
     if (!appRef.current) return;
+    appRef.current.setWorldAxesVisible(true);
 
     if (mode === "preview") {
       appRef.current.setPlacementDistance(0);

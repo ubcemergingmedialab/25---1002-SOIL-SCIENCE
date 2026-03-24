@@ -202,6 +202,7 @@ export default function UBCMap({
         if (!res.ok) throw new Error(`Pins fetch failed: ${res.status}`);
 
         const data = (await res.json()) as Array<{
+          FieldID?: string;
           title?: string;
           position?: { lat: number; lng: number };
           path?: string;
@@ -214,18 +215,34 @@ export default function UBCMap({
 
         if (cancelled) return;
 
+        console.log(
+          "[UBCMap] /pins response",
+          {
+            count: Array.isArray(data) ? data.length : 0,
+            idsOrTitles: (data ?? []).map((p) => p.FieldID ?? p.title ?? "(untitled)"),
+          }
+        );
+
         const nextPins: Pin[] = data
-          .filter((p) => p?.position?.lat && p?.position?.lng)
-          .map((p) => ({
-            title: p.title ?? "",
-            position: { lat: p.position!.lat, lng: p.position!.lng },
-            path: p.path ?? "",
-            description: p.description ?? "",
-            thumbnail: p.thumbnail ?? "",
-            thumbnailAlt: p.thumbnailAlt ?? "",
-            start_pos: p.start_pos,
-            markers: p.markers ?? [],
-          }));
+          .map((p) => {
+            const latRaw = p?.position?.lat;
+            const lngRaw = p?.position?.lng;
+            const lat = typeof latRaw === "number" ? latRaw : Number(latRaw);
+            const lng = typeof lngRaw === "number" ? lngRaw : Number(lngRaw);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+            return {
+              title: p.title ?? "",
+              position: { lat, lng },
+              path: p.path ?? "",
+              description: p.description ?? "",
+              thumbnail: p.thumbnail ?? "",
+              thumbnailAlt: p.thumbnailAlt ?? "",
+              start_pos: p.start_pos,
+              markers: p.markers ?? [],
+            };
+          })
+          .filter(Boolean) as Pin[];
 
         setPins(nextPins);
       } catch (err) {

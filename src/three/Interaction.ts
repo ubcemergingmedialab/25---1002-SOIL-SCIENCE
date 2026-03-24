@@ -39,7 +39,7 @@ export class MarkerPickingController {
     this.onPlaceClick = opts.onPlaceClick;
     this.interestPointObject = opts.interestPointObject;
     this.onInterestPointClick = opts.onInterestPointClick;
-    this.raycaster.params.Line = { threshold: 0.2 };
+    this.raycaster.params.Line = { threshold: 0.08 };
 
     this.dom.addEventListener("pointerdown", this.onDown);
     this.dom.addEventListener("pointermove", this.onMove);
@@ -86,7 +86,7 @@ export class MarkerPickingController {
     this.raycaster.setFromCamera(this.pointerNdc, this.camera);
 
     const pickables: THREE.Object3D[] = [...this.markers.getPickableObjects()];
-    if (this.interestPointObject) {
+    if (this.interestPointObject && this.onInterestPointClick) {
       pickables.push(this.interestPointObject);
     }
 
@@ -149,7 +149,7 @@ export class MarkerPickingController {
 
     const sprites = this.markers.getSprites();
 
-    if (this.interestPointObject && downHit === this.interestPointObject) {
+    if (this.interestPointObject && downHit === this.interestPointObject && this.onInterestPointClick) {
       this.onInterestPointClick?.();
       return;
     }
