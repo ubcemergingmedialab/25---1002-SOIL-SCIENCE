@@ -11,6 +11,7 @@ export type Field = {
   Longitude?: number;
   Thumbnail?: string;
   ThumbnailAlt?: string;
+  start_pos?: unknown;
   markers?: unknown;
 };
 

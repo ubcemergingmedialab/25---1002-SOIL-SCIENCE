@@ -22,6 +22,7 @@ type Pin = {
   description: string;
   thumbnail: string;
   thumbnailAlt: string;
+  start_pos?: unknown;
   markers?: Array<Record<string, unknown>>;
 };
 
@@ -159,11 +160,15 @@ export default function UBCMap({
   activeViewer,
   onCloseViewer,
 }: {
-  openViewer: (path?: string, markers?: Array<Record<string, unknown>>) => void;
+  openViewer: (
+    path?: string,
+    markers?: Array<Record<string, unknown>>,
+    startPos?: unknown
+  ) => void;
   mapLoaded: boolean;
   setMapLoaded: (loaded: boolean) => void;
   sidebarCollapsed: boolean;
-  activeViewer: { path: string; markers?: Array<Record<string, unknown>> } | null;
+  activeViewer: { path: string; markers?: Array<Record<string, unknown>>; startPos?: unknown } | null;
   onCloseViewer: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -203,6 +208,7 @@ export default function UBCMap({
           description?: string;
           thumbnail?: string;
           thumbnailAlt?: string;
+          start_pos?: unknown;
           markers?: Array<Record<string, unknown>>;
         }>;
 
@@ -217,6 +223,7 @@ export default function UBCMap({
             description: p.description ?? "",
             thumbnail: p.thumbnail ?? "",
             thumbnailAlt: p.thumbnailAlt ?? "",
+            start_pos: p.start_pos,
             markers: p.markers ?? [],
           }));
 
@@ -284,7 +291,7 @@ export default function UBCMap({
 
       const content = buildPopupContent(
         pin,
-        () => openViewer(pin.path, pin.markers),
+        () => openViewer(pin.path, pin.markers, pin.start_pos),
         () => marker.closePopup()
       );
 
@@ -487,6 +494,7 @@ export default function UBCMap({
             <Viewer
               gaussianPath={activeViewer.path}
               markers={activeViewer.markers}
+              startPos={activeViewer.startPos}
               onBack={onCloseViewer}
               embedded
             />

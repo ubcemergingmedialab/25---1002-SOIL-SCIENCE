@@ -65,6 +65,7 @@ export class ThreeApp {
   private worldAxesScene = new THREE.Scene();
   private worldAxes?: THREE.AxesHelper;
   private playAreaBounds: THREE.Box3 | null = null;
+  private currentStartPos = new THREE.Vector3(0, 0, 0);
 
   // cene at reduced res, markers at full res
   private sceneRenderTarget: THREE.WebGLRenderTarget | null = null;
@@ -282,9 +283,9 @@ export class ThreeApp {
         }
       });
       if (!this.destroyed) {
-        this.camera.position.set(0, 2.5, 5);
+        this.camera.position.copy(this.currentStartPos).add(new THREE.Vector3(0, 2.5, 5));
         if (this.orbitControls) {
-          this.orbitControls.target.set(0, 0, 0);
+          this.orbitControls.target.copy(this.currentStartPos);
           this.orbitControls.update();
         }
       }
@@ -306,6 +307,18 @@ export class ThreeApp {
     selectedIndex?: Parameters<WorldMarkers["setMarkers"]>[2]
   ) {
     this.markers.setMarkers(markers, previewMarker, selectedIndex);
+  }
+
+  public setWorldAxesPosition(position: THREE.Vector3 | [number, number, number]) {
+    if (Array.isArray(position)) {
+      this.currentStartPos.set(position[0], position[1], position[2]);
+    } else {
+      this.currentStartPos.copy(position);
+    }
+
+    this.worldAxes?.position.copy(this.currentStartPos);
+    this.orbitControls?.target.copy(this.currentStartPos);
+    this.orbitControls?.update();
   }
 
   public getCamera(): THREE.Camera {
@@ -516,7 +529,7 @@ export class ThreeApp {
       this.orbitControls.panSpeed = 0.8;
       this.orbitControls.rotateSpeed = 0.9;
 
-      this.orbitControls.target.set(0, 0, 0);
+      this.orbitControls.target.copy(this.currentStartPos);
       this.orbitControls.update();
       this.renderer.domElement.style.cursor = "grab";
       return;

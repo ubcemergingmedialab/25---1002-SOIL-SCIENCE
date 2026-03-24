@@ -31,8 +31,30 @@ type EditorMarker = {
 type Pin = {
   title: string;
   path: string;
+  start_pos?: unknown;
   markers?: Array<Record<string, unknown>>;
 };
+
+function parseStartPos(raw: unknown): [number, number, number] | null {
+  if (Array.isArray(raw) && raw.length >= 3) {
+    const [x, y, z] = raw;
+    if ([x, y, z].every((value) => typeof value === "number" && Number.isFinite(value))) {
+      return [x, y, z];
+    }
+  }
+
+  if (raw && typeof raw === "object") {
+    const pos = raw as { x?: unknown; y?: unknown; z?: unknown };
+    const x = toFiniteNumber(pos.x);
+    const y = toFiniteNumber(pos.y);
+    const z = toFiniteNumber(pos.z);
+    if (x !== null && y !== null && z !== null) {
+      return [x, y, z];
+    }
+  }
+
+  return null;
+}
 
 function backendMarkersToEditorMarkers(raw: MarkerPayload[] | undefined): EditorMarker[] {
   if (!raw || !Array.isArray(raw)) return [];
@@ -202,6 +224,7 @@ export default function Editor() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [saveMessage, setSaveMessage] = useState("");
   const [positionDrafts, setPositionDrafts] = useState<[string, string, string]>(["0.00", "0.00", "0.00"]);
+  const [axisStartPos, setAxisStartPos] = useState<[number, number, number] | null>(null);
 
   const syncMarkersToApp = useCallback(() => {
     if (!appRef.current) return;
@@ -237,6 +260,7 @@ export default function Editor() {
     if (!wrapRef.current) return;
     const app = new ThreeApp(wrapRef.current, { defaultControlMode });
     appRef.current = app;
+    app.setWorldAxesPosition(axisStartPos ?? [0, 0, 0]);
 
     const pathFromUrl = gaussianPathParam;
     const markersParam = searchParams.get("markers");
@@ -276,6 +300,7 @@ export default function Editor() {
       setManagedField(null);
       setFieldStatus("idle");
       setFieldError("");
+      setAxisStartPos(null);
       return;
     }
 
@@ -296,6 +321,7 @@ export default function Editor() {
         }
         setManagedField(field);
         setFieldStatus("ready");
+        setAxisStartPos(parseStartPos(field.start_pos));
         const backendMarkers = Array.isArray(field.markers) ? (field.markers as MarkerPayload[]) : [];
         const nextMarkers = backendMarkersToEditorMarkers(backendMarkers);
         setMarkers(nextMarkers);
@@ -332,6 +358,10 @@ export default function Editor() {
   useEffect(() => {
     syncMarkersToApp();
   }, [syncMarkersToApp]);
+
+  useEffect(() => {
+    appRef.current?.setWorldAxesPosition(axisStartPos ?? [0, 0, 0]);
+  }, [axisStartPos]);
 
   useEffect(() => {
     if (selectedMarkerIndex === null || !markers[selectedMarkerIndex]) {
@@ -381,6 +411,7 @@ export default function Editor() {
           ? new URL(pin.path, window.location.origin).href
           : pin.path
         : new URL(pin.path, window.location.href).href;
+    setAxisStartPos(parseStartPos(pin.start_pos));
     setMarkers(parseApiMarkers(pin.markers ?? []));
     setSelectedMarkerIndex(null);
     appRef.current?.loadGaussianScene(resolved);
@@ -390,10 +421,11 @@ export default function Editor() {
     awsClient
       .fetch(`${import.meta.env.VITE_API_URL}/pins`, { method: "GET" })
       .then((r) => r.json())
-      .then((data: Array<{ title?: string; path?: string; markers?: Array<Record<string, unknown>> }>) => {
+      .then((data: Array<{ title?: string; path?: string; start_pos?: unknown; markers?: Array<Record<string, unknown>> }>) => {
         const next: Pin[] = (data ?? []).map((p) => ({
           title: p.title ?? "",
           path: p.path ?? "",
+          start_pos: p.start_pos,
           markers: p.markers ?? [],
         }));
         setPins(next);

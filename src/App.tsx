@@ -5,6 +5,7 @@ import UBCMap from "./UBCMap";
 type ViewerState = {
   path: string;
   markers?: Array<Record<string, unknown>>;
+  startPos?: unknown;
 } | null;
 
 export default function App() {
@@ -20,9 +21,13 @@ export default function App() {
   const infoIcon = activeTab === "info" ? "/assets/icons/icon_info_select.png" : "/assets/icons/icon_info.png";
   const mapIcon = activeTab === "map" ? "/assets/icons/icon_map_select.png" : "/assets/icons/icon_map.png";
 
-  const openViewer = (path?: string, markers?: Array<Record<string, unknown>>) => {
+  const openViewer = (
+    path?: string,
+    markers?: Array<Record<string, unknown>>,
+    startPos?: unknown
+  ) => {
     if (!path) return;
-    setViewerState({ path, markers });
+    setViewerState({ path, markers, startPos });
   };
 
   const closeViewer = () => {
