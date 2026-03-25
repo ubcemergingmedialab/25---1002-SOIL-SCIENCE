@@ -23,6 +23,31 @@ type ThreeAppOptions = {
   defaultControlMode?: ControlMode;
 };
 
+/** RGB axes as thick cylinders (AxesHelper uses lines; `linewidth` is ignored in WebGL on most GPUs). */
+function createThickWorldAxes(length: number, radius: number): THREE.Group {
+  const group = new THREE.Group();
+  const segs = 10;
+  const addAxis = (color: number, axis: "x" | "y" | "z") => {
+    const geom = new THREE.CylinderGeometry(radius, radius, length, segs);
+    const mat = new THREE.MeshBasicMaterial({ color });
+    const mesh = new THREE.Mesh(geom, mat);
+    if (axis === "x") {
+      mesh.rotation.z = -Math.PI / 2;
+      mesh.position.set(length / 2, 0, 0);
+    } else if (axis === "y") {
+      mesh.position.set(0, length / 2, 0);
+    } else {
+      mesh.rotation.x = Math.PI / 2;
+      mesh.position.set(0, 0, length / 2);
+    }
+    group.add(mesh);
+  };
+  addAxis(0xff0000, "x");
+  addAxis(0x00ff00, "y");
+  addAxis(0x0000ff, "z");
+  return group;
+}
+
 export class ThreeApp {
   // Core
   private container: HTMLElement;
@@ -61,9 +86,9 @@ export class ThreeApp {
   // Editor: placement preview (distance in front of camera, preview marker is passed via setWorldMarkers)
   private placementDistance = 0;
 
-  // Debug
+  // Debug (mesh cylinders — WebGL ignores line width for AxesHelper)
   private worldAxesScene = new THREE.Scene();
-  private worldAxes?: THREE.AxesHelper;
+  private worldAxes?: THREE.Group;
   private playAreaBounds: THREE.Box3 | null = null;
 
   // cene at reduced res, markers at full res
@@ -181,7 +206,7 @@ export class ThreeApp {
       moveThresholdPx: 6,
     });
     this.initSkybox();
-    this.worldAxes = new THREE.AxesHelper(1);
+    this.worldAxes = createThickWorldAxes(1, 0.045);
     this.worldAxesScene.add(this.worldAxes);
   }
 
@@ -477,13 +502,14 @@ export class ThreeApp {
     this.orbitControls?.dispose();
 
     if (this.worldAxes) {
-      this.worldAxes.geometry.dispose();
-      const mats = Array.isArray(this.worldAxes.material)
-        ? this.worldAxes.material
-        : [this.worldAxes.material];
-      for (const m of mats) {
-        if ("dispose" in m && typeof m.dispose === "function") m.dispose();
-      }
+      this.worldAxes.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry.dispose();
+          const m = obj.material;
+          if (Array.isArray(m)) m.forEach((mat) => mat.dispose());
+          else m.dispose();
+        }
+      });
     }
 
     this.skybox.dispose();
