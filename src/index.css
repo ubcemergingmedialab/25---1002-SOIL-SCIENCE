@@ -92,7 +92,18 @@ input {
 }
 
 .tabContent {
+  position: relative;
   height: 100%;
+}
+
+.tabPanel {
+  position: absolute;
+  inset: 0;
+}
+
+.tabPanel.inactive {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .viewerPane,

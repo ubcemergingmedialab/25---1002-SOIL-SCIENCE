@@ -5,6 +5,7 @@ import UBCMap from "./UBCMap";
 type ViewerState = {
   path: string;
   markers?: Array<Record<string, unknown>>;
+  startPos?: unknown;
 } | null;
 
 export default function App() {
@@ -20,9 +21,13 @@ export default function App() {
   const infoIcon = activeTab === "info" ? "/assets/icons/icon_info_select.png" : "/assets/icons/icon_info.png";
   const mapIcon = activeTab === "map" ? "/assets/icons/icon_map_select.png" : "/assets/icons/icon_map.png";
 
-  const openViewer = (path?: string, markers?: Array<Record<string, unknown>>) => {
+  const openViewer = (
+    path?: string,
+    markers?: Array<Record<string, unknown>>,
+    startPos?: unknown
+  ) => {
     if (!path) return;
-    setViewerState({ path, markers });
+    setViewerState({ path, markers, startPos });
   };
 
   const closeViewer = () => {
@@ -71,7 +76,7 @@ export default function App() {
       <div className="appMain">
         <h1 className="appTopTitle">Virtual Soil</h1>
         <main className="tabContent">
-          {activeTab === "map" ? (
+          <section className={`tabPanel ${activeTab === "map" ? "active" : "inactive"}`}>
             <UBCMap
               openViewer={openViewer}
               mapLoaded={mapLoaded}
@@ -80,7 +85,9 @@ export default function App() {
               activeViewer={viewerState}
               onCloseViewer={closeViewer}
             />
-          ) : (
+          </section>
+
+          <section className={`tabPanel ${activeTab === "info" ? "active" : "inactive"}`}>
             <section className="aboutPane">
               <aside className={`sidePanel infoSidePanel ${infoSidebarCollapsed ? "collapsed" : ""}`}>
                 {!infoSidebarCollapsed && (
@@ -96,8 +103,8 @@ export default function App() {
               </aside>
 
               <article className="aboutContent floatSection">
-            {/* WHY */}
-            <h2 id="TheWhy">Why Virtual Soils?</h2>
+                {/* WHY */}
+                <h2 id="TheWhy">Why Virtual Soils?</h2>
 
             <figure className="float-right">
               {}
@@ -359,7 +366,7 @@ export default function App() {
             </p>
               </article>
             </section>
-          )}
+          </section>
         </main>
       </div>
     </div>

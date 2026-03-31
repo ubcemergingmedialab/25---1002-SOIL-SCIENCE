@@ -4,6 +4,7 @@ import * as THREE from "three";
 export class FlyControls {
   private camera: THREE.PerspectiveCamera;
   private domElement: HTMLElement;
+  private enabled = true;
 
   // Flycam
   private flyVel = new THREE.Vector3();
@@ -63,6 +64,7 @@ export class FlyControls {
    * Called every frame from ThreeApp.tick(dt)
    */
   update(dt: number) {
+    if (!this.enabled) return;
     // Damping
     const damp = Math.exp(-this.damping * dt);
     this.flyVel.multiplyScalar(damp);
@@ -114,6 +116,16 @@ export class FlyControls {
     this.bounds = bounds ? bounds.clone() : null;
   }
 
+  setEnabled(enabled: boolean) {
+    this.enabled = enabled;
+    if (!enabled) {
+      this.isDragging = false;
+      this.flyVel.set(0, 0, 0);
+      this.moving = { f: false, b: false, l: false, r: false, u: false, d: false };
+      this.domElement.style.cursor = "grab";
+    }
+  }
+
   dispose() {
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
@@ -127,6 +139,7 @@ export class FlyControls {
   // --- Pointer handlers ---
 
   private handlePointerDown(e: PointerEvent) {
+    if (!this.enabled) return;
     if (e.button !== 0) return;
     this.isDragging = true;
     try {
@@ -139,6 +152,7 @@ export class FlyControls {
   }
 
   private handlePointerMove(e: PointerEvent) {
+    if (!this.enabled) return;
     if (!this.isDragging) return;
     const dx = e.clientX - this.lastPointer.x;
     const dy = e.clientY - this.lastPointer.y;
@@ -154,6 +168,7 @@ export class FlyControls {
   }
 
   private handlePointerUp(e: PointerEvent) {
+    if (!this.enabled) return;
     if (!this.isDragging) return;
     this.isDragging = false;
     try {
@@ -167,6 +182,7 @@ export class FlyControls {
   // --- Wheel handler ---
 
   private handleWheel(e: WheelEvent) {
+    if (!this.enabled) return;
     // Prevent page scroll when hovering the canvas
     e.preventDefault();
 
@@ -189,6 +205,7 @@ export class FlyControls {
   }
 
   private handleKeyDown(e: KeyboardEvent) {
+    if (!this.enabled) return;
     if (FlyControls.isTypingTarget(document.activeElement)) return;
     if (e.code === "KeyW") this.moving.f = true;
     if (e.code === "KeyS") this.moving.b = true;
@@ -200,6 +217,7 @@ export class FlyControls {
   }
 
   private handleKeyUp(e: KeyboardEvent) {
+    if (!this.enabled) return;
     if (FlyControls.isTypingTarget(document.activeElement)) return;
     if (e.code === "KeyW") this.moving.f = false;
     if (e.code === "KeyS") this.moving.b = false;

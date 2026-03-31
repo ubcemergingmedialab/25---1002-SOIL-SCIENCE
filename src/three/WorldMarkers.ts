@@ -15,6 +15,7 @@ export type MarkerInput = {
  */
 export class WorldMarkers {
   private readonly scene = new THREE.Scene();
+  private readonly overlayScene = new THREE.Scene();
   private sprites: THREE.Sprite[] = [];
   private readonly defaultTexture: THREE.Texture;
 
@@ -72,8 +73,17 @@ export class WorldMarkers {
     renderer.render(this.scene, camera);
   }
 
+  renderOverlay(renderer: THREE.WebGLRenderer, camera: THREE.Camera) {
+    if (!this.labelSprite) return;
+    renderer.render(this.overlayScene, camera);
+  }
+
   getSprites(): readonly THREE.Sprite[] {
     return this.sprites;
+  }
+
+  getSpriteAt(index: number): THREE.Sprite | null {
+    return this.sprites[index] ?? null;
   }
 
   getPickableObjects(): readonly THREE.Object3D[] {
@@ -126,8 +136,8 @@ export class WorldMarkers {
 
     const mat = new THREE.SpriteMaterial({
       map: texture,
-      depthTest: true,
-      depthWrite: true,
+      depthTest: false,
+      depthWrite: false,
       transparent: true,
       opacity: 1,
     });
@@ -161,12 +171,12 @@ export class WorldMarkers {
     this.labelTarget = sprite;
 
     sprite.visible = false;
-    this.scene.add(label);
+    this.overlayScene.add(label);
   }
 
   private clearLabel() {
     if (this.labelSprite) {
-      this.scene.remove(this.labelSprite);
+      this.overlayScene.remove(this.labelSprite);
       const mat = this.labelSprite.material;
       mat.map?.dispose();
       mat.dispose();

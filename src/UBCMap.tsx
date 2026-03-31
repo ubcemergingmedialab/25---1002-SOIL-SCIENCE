@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import { awsClient } from "./lib/awsClient";
 import Viewer from "./Viewer";
@@ -22,6 +22,7 @@ type Pin = {
   description: string;
   thumbnail: string;
   thumbnailAlt: string;
+  start_pos?: unknown;
   markers?: Array<Record<string, unknown>>;
 };
 
@@ -159,12 +160,15 @@ export default function UBCMap({
   activeViewer,
   onCloseViewer,
 }: {
-  openViewer: (path?: string, markers?: Array<Record<string, unknown>>) => void;
+  openViewer: (
+    path?: string,
+    markers?: Array<Record<string, unknown>>,
+    startPos?: unknown
+  ) => void;
   mapLoaded: boolean;
   setMapLoaded: (loaded: boolean) => void;
-  setSidebarCollapsed: (collapsed: boolean | ((current: boolean) => boolean)) => void;
   sidebarCollapsed: boolean;
-  activeViewer: { path: string; markers?: Array<Record<string, unknown>> } | null;
+  activeViewer: { path: string; markers?: Array<Record<string, unknown>>; startPos?: unknown } | null;
   onCloseViewer: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -172,6 +176,7 @@ export default function UBCMap({
   const markersRef = useRef<L.Marker[]>([]);
   const pinToMarkerRef = useRef<Map<number, L.Marker>>(new Map());
   const pendingPopupPinIndexRef = useRef<number | null>(null);
+  const selectedPinIndexRef = useRef<number | null>(null);
   const [pins, setPins] = useState<Pin[]>([]);
   const [selectedPinIndex, setSelectedPinIndex] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -180,42 +185,64 @@ export default function UBCMap({
     .map((pin, index) => ({ pin, index }))
     .filter(({ pin }) => (pin.title || "").toLowerCase().includes(searchQuery.toLowerCase()));
 
+  const fetchPins = useCallback(async () => {
+    const res = await awsClient.fetch(
+      `${import.meta.env.VITE_API_URL}/pins`,
+      { method: "GET" }
+    );
+
+    if (!res.ok) throw new Error(`Pins fetch failed: ${res.status}`);
+
+    const data = (await res.json()) as Array<{
+      FieldID?: string;
+      title?: string;
+      position?: { lat: number; lng: number };
+      path?: string;
+      description?: string;
+      thumbnail?: string;
+      thumbnailAlt?: string;
+      start_pos?: unknown;
+      markers?: Array<Record<string, unknown>>;
+    }>;
+
+    console.log("[UBCMap] /pins response", {
+      count: Array.isArray(data) ? data.length : 0,
+      idsOrTitles: (data ?? []).map((p) => p.FieldID ?? p.title ?? "(untitled)"),
+    });
+
+    return data
+      .map((p) => {
+        const latRaw = p?.position?.lat;
+        const lngRaw = p?.position?.lng;
+        const lat = typeof latRaw === "number" ? latRaw : Number(latRaw);
+        const lng = typeof lngRaw === "number" ? lngRaw : Number(lngRaw);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+        return {
+          title: p.title ?? "",
+          position: { lat, lng },
+          path: p.path ?? "",
+          description: p.description ?? "",
+          thumbnail: p.thumbnail ?? "",
+          thumbnailAlt: p.thumbnailAlt ?? "",
+          start_pos: p.start_pos,
+          markers: p.markers ?? [],
+        };
+      })
+      .filter(Boolean) as Pin[];
+  }, []);
+
+  useEffect(() => {
+    selectedPinIndexRef.current = selectedPinIndex;
+  }, [selectedPinIndex]);
+
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       try {
-        const res = await awsClient.fetch(
-          `${import.meta.env.VITE_API_URL}/pins`,
-          { method: "GET" }
-        );
-
-        if (!res.ok) throw new Error(`Pins fetch failed: ${res.status}`);
-
-        const data = (await res.json()) as Array<{
-          title?: string;
-          position?: { lat: number; lng: number };
-          path?: string;
-          description?: string;
-          thumbnail?: string;
-          thumbnailAlt?: string;
-          markers?: Array<Record<string, unknown>>;
-        }>;
-
+        const nextPins = await fetchPins();
         if (cancelled) return;
-
-        const nextPins: Pin[] = data
-          .filter((p) => p?.position?.lat && p?.position?.lng)
-          .map((p) => ({
-            title: p.title ?? "",
-            position: { lat: p.position!.lat, lng: p.position!.lng },
-            path: p.path ?? "",
-            description: p.description ?? "",
-            thumbnail: p.thumbnail ?? "",
-            thumbnailAlt: p.thumbnailAlt ?? "",
-            markers: p.markers ?? [],
-          }));
-
         setPins(nextPins);
       } catch (err) {
         if (!cancelled) console.error("Failed to load pins", err);
@@ -225,7 +252,36 @@ export default function UBCMap({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [fetchPins]);
+
+  useEffect(() => {
+    const refreshPins = async () => {
+      try {
+        const nextPins = await fetchPins();
+        setPins(nextPins);
+      } catch (err) {
+        console.error("Failed to refresh pins", err);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshPins();
+      }
+    };
+
+    const handleFocus = () => {
+      void refreshPins();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, [fetchPins]);
 
   useEffect(() => {
     if (!mapLoaded || !containerRef.current) return;
@@ -244,22 +300,51 @@ export default function UBCMap({
     }).addTo(map);
 
     mapRef.current = map;
-    map.on('click', () => { setSelectedPinIndex(null);})
-     
-    
+    map.on("click", () => {
+      setSelectedPinIndex(null);
+      map.closePopup();
+    });
+
 
     markersRef.current.forEach((m) => map.removeLayer(m));
     markersRef.current = [];
     pinToMarkerRef.current.clear();
 
     pins.forEach((pin, index) => {
-      const marker = L.marker([pin.position.lat, pin.position.lng])
-        .addTo(map)
-        .on("click", () => setSelectedPinIndex(index));
+      let markerHovered = false;
+      let popupHovered = false;
+      let closePopupTimeout: number | null = null;
+
+      const clearClosePopupTimeout = () => {
+        if (closePopupTimeout !== null) {
+          window.clearTimeout(closePopupTimeout);
+          closePopupTimeout = null;
+        }
+      };
+
+      const schedulePopupClose = () => {
+        clearClosePopupTimeout();
+        closePopupTimeout = window.setTimeout(() => {
+          const isSelected = selectedPinIndexRef.current === index;
+          if (!markerHovered && !popupHovered && !isSelected) {
+            marker.closePopup();
+          }
+        }, 90);
+      };
+
+      const marker = L.marker([pin.position.lat, pin.position.lng]).addTo(map);
 
       const content = buildPopupContent(
         pin,
-        () => openViewer(pin.path, pin.markers),
+        () => {
+          console.log("[UBCMap start_pos debug] opening viewer from pin", {
+            title: pin.title,
+            path: pin.path,
+            start_pos: pin.start_pos,
+            markersCount: Array.isArray(pin.markers) ? pin.markers.length : 0,
+          });
+          openViewer(pin.path, pin.markers, pin.start_pos);
+        },
         () => marker.closePopup()
       );
 
@@ -268,6 +353,48 @@ export default function UBCMap({
         closeButton: false,
         maxWidth: 280,
         minWidth: 280,
+      });
+
+      marker.on("mouseover", () => {
+        markerHovered = true;
+        clearClosePopupTimeout();
+        marker.openPopup();
+      });
+
+      marker.on("mouseout", () => {
+        markerHovered = false;
+        schedulePopupClose();
+      });
+
+      marker.on("popupopen", () => {
+        const popupElement = marker.getPopup()?.getElement();
+        if (!popupElement) return;
+
+        popupElement.onmouseenter = () => {
+          popupHovered = true;
+          clearClosePopupTimeout();
+        };
+
+        popupElement.onmouseleave = () => {
+          popupHovered = false;
+          schedulePopupClose();
+        };
+      });
+
+      marker.on("popupclose", () => {
+        popupHovered = false;
+        clearClosePopupTimeout();
+        const popupElement = marker.getPopup()?.getElement();
+        if (popupElement) {
+          popupElement.onmouseenter = null;
+          popupElement.onmouseleave = null;
+        }
+      });
+
+      marker.on("click", () => {
+        markerHovered = true;
+        clearClosePopupTimeout();
+        handlePinMenuClick(index);
       });
 
       pinToMarkerRef.current.set(index, marker);
@@ -301,7 +428,7 @@ export default function UBCMap({
   const getOffsetCenter = (map: L.Map, latLng: L.LatLng, targetZoom = 15) => {
     const mapSize = map.getSize();
     const markerPoint = map.project(latLng, targetZoom);
-    const targetCenterPoint = markerPoint.subtract([0, mapSize.y * 0.25]);
+    const targetCenterPoint = markerPoint.subtract([0, mapSize.y * 0.12]);
     return map.unproject(targetCenterPoint, targetZoom);
   };
 
@@ -420,6 +547,7 @@ export default function UBCMap({
             <Viewer
               gaussianPath={activeViewer.path}
               markers={activeViewer.markers}
+              startPos={activeViewer.startPos}
               onBack={onCloseViewer}
               embedded
             />
