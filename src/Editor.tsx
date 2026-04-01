@@ -6,7 +6,7 @@ import type { ControlMode } from "./three/ScreenSpace";
 import type { MarkerInput } from "./three/WorldMarkers";
 // import { awsClient } from "./lib/awsClient";
 // import { listFields, updateFieldMarkers } from "./adminApi";
-import { updateField, updateFieldMarkers } from "./adminApi";
+import { updateField } from "./adminApi";
 import type { Field as AdminField, MarkerPayload } from "./adminApi";
 import "./index.css";
 
