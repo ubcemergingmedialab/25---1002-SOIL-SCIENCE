@@ -9,7 +9,6 @@ import type { MarkerInput } from "./three/WorldMarkers";
 import { updateField } from "./adminApi";
 import type { Field as AdminField, MarkerPayload } from "./adminApi";
 import "./index.css";
-import { fetchAuthSession } from "aws-amplify/auth";
 
 const PLACEMENT_DISTANCE_DEFAULT = 1;
 
@@ -199,26 +198,9 @@ function parseMarkerFormParam(raw: string | null): EditorMarker | null {
   }
 }
 
-
-async function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
-  const session = await fetchAuthSession();
-  const token =
-    session.tokens?.idToken?.toString() ??
-    session.tokens?.accessToken?.toString();
-
-  return fetch(input, {
-    ...init,
-    headers: {
-      ...(init.headers ?? {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      "Content-Type": "application/json",
-    },
-  });
-}
-
 async function fetchFieldById(fieldId: string): Promise<AdminField | null> {
   const baseUrl = import.meta.env.VITE_API_URL as string;
-  const res = await authFetch(`${baseUrl}/fields/${encodeURIComponent(fieldId)}`, {
+  const res = await fetch(`${baseUrl}/fields/${encodeURIComponent(fieldId)}`, {
     method: "GET",
   });
 
@@ -522,7 +504,7 @@ export default function Editor() {
     // awsClient
     //   .fetch(`${import.meta.env.VITE_API_URL}/pins`, { method: "GET" })
     //   .then((r) => r.json())
-    authFetch(`${import.meta.env.VITE_API_URL}/pins`, { method: "GET" })
+    fetch(`${import.meta.env.VITE_API_URL}/pins`, { method: "GET" })
       .then((r) => r.json())
       .then((data: Array<{ title?: string; path?: string; start_pos?: unknown; markers?: Array<Record<string, unknown>> }>) => {
         const next: Pin[] = (data ?? []).map((p) => ({
@@ -538,21 +520,6 @@ export default function Editor() {
       })
       .catch((err) => console.error("Failed to load pins for editor", err));
   }, [searchParams]);
-    async function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
-  const session = await fetchAuthSession();
-  const token =
-    session.tokens?.idToken?.toString() ??
-    session.tokens?.accessToken?.toString();
-
-  return fetch(input, {
-    ...init,
-    headers: {
-      ...(init.headers ?? {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      "Content-Type": "application/json",
-    },
-  });
-}
 
   const handleSaveMarkers = useCallback(async () => {
     console.log("[Editor start_pos debug] save handler invoked", {

@@ -6,7 +6,6 @@ import Viewer from "./Viewer";
 /* Fix default marker icon with bundlers (Leaflet expects images at root) */
 import markerIconUrl from "leaflet/dist/images/marker-icon.png";
 import markerShadowUrl from "leaflet/dist/images/marker-shadow.png";
-import { fetchAuthSession } from "aws-amplify/auth";
 
 L.Marker.prototype.options.icon = L.icon({
   iconUrl: markerIconUrl,
@@ -186,24 +185,8 @@ export default function UBCMap({
     .map((pin, index) => ({ pin, index }))
     .filter(({ pin }) => (pin.title || "").toLowerCase().includes(searchQuery.toLowerCase()));
 
-    async function authFetch(input: RequestInfo | URL, init: RequestInit = {}) {
-      const session = await fetchAuthSession();
-      const token =
-        session.tokens?.idToken?.toString() ??
-        session.tokens?.accessToken?.toString();
-    
-      return fetch(input, {
-        ...init,
-        headers: {
-          ...(init.headers ?? {}),
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          "Content-Type": "application/json",
-        },
-      });
-    }
-
     const fetchPins = useCallback(async () => {
-      const res = await authFetch(
+      const res = await fetch(
         `${import.meta.env.VITE_API_URL}/pins`,
         { method: "GET" }
       );
