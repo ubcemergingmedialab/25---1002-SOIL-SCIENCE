@@ -18,9 +18,14 @@ type MarkerPayload = {
   text?: string;
 };
 
+type StartPosPayload =
+  | { x?: number; y?: number; z?: number }
+  | [number, number, number];
+
 export type ViewerProps = {
   gaussianPath?: string;
   markers?: Array<Record<string, unknown>>;
+  startPos?: unknown;
   onBack?: () => void;
   embedded?: boolean;
 };
@@ -42,7 +47,35 @@ const parseMarkers = (raw: string | null): MarkerPayload[] => {
   }
 };
 
-export default function Viewer({ gaussianPath, markers, onBack, embedded }: ViewerProps = {}) {
+const parseStartPos = (raw: unknown): [number, number, number] | null => {
+  if (Array.isArray(raw) && raw.length >= 3) {
+    const [x, y, z] = raw;
+    if ([x, y, z].every((value) => typeof value === "number" && Number.isFinite(value))) {
+      return [x, y, z];
+    }
+  }
+
+  if (raw && typeof raw === "object") {
+    const pos = raw as StartPosPayload;
+    if (!Array.isArray(pos)) {
+      const { x, y, z } = pos;
+      if (
+        typeof x === "number" &&
+        Number.isFinite(x) &&
+        typeof y === "number" &&
+        Number.isFinite(y) &&
+        typeof z === "number" &&
+        Number.isFinite(z)
+      ) {
+        return [x, y, z];
+      }
+    }
+  }
+
+  return null;
+};
+
+export default function Viewer({ gaussianPath, markers, startPos, onBack, embedded }: ViewerProps = {}) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const location = useLocation();
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -55,6 +88,27 @@ export default function Viewer({ gaussianPath, markers, onBack, embedded }: View
     const params = new URLSearchParams(location.search);
     const raw = gaussianPath || params.get("gaussianPath");
     const markerParam = markers ? JSON.stringify(markers) : params.get("markers");
+    const startPosParam = startPos ?? (() => {
+      const value = params.get("startPos");
+      if (!value) return null;
+      try {
+        return JSON.parse(value);
+      } catch (err) {
+        console.warn("Failed to parse start position payload", err);
+        return null;
+      }
+    })();
+    const parsedStartPos = parseStartPos(startPosParam);
+    console.log("[Viewer start_pos debug] resolved viewer start position", {
+      gaussianPath: raw,
+      startPosProp: startPos,
+      startPosParam,
+      parsedStartPos,
+      markersCount: Array.isArray(markers) ? markers.length : markerParam ? parseMarkers(markerParam).length : 0,
+    });
+
+    app.setWorldAxesPosition(parsedStartPos ?? [0, 0, 0]);
+    app.setWorldAxesVisible(false);
 
     if (raw && hasSetGaussianPath(app)) {
       // resolve: support /assets from public, absolute urls, and relative fallbacks
@@ -113,7 +167,7 @@ export default function Viewer({ gaussianPath, markers, onBack, embedded }: View
     }
 
     return () => app.dispose();
-  }, [location.search, gaussianPath, markers]);
+  }, [location.search, gaussianPath, markers, startPos]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {

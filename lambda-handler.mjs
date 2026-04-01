@@ -76,6 +76,28 @@ const parseMarkers = (raw) => {
     .filter(Boolean);
 };
 
+const parseStartPos = (raw) => {
+  const normalized = unwrapAttributeValue(raw);
+
+  if (Array.isArray(normalized) && normalized.length >= 3) {
+    const [x, y, z] = normalized.slice(0, 3).map((value) => toNumber(value));
+    if ([x, y, z].every((value) => typeof value === "number")) {
+      return { x, y, z };
+    }
+  }
+
+  if (normalized && typeof normalized === "object") {
+    const x = toNumber(normalized.x);
+    const y = toNumber(normalized.y);
+    const z = toNumber(normalized.z);
+    if ([x, y, z].every((value) => typeof value === "number")) {
+      return { x, y, z };
+    }
+  }
+
+  return undefined;
+};
+
 // --- three simple handlers ---
 
 async function getPins() {
@@ -92,7 +114,7 @@ async function getPins() {
       description: i.Description,
       thumbnail: i.Thumbnail,
       thumbnailAlt: i.ThumbnailAlt,
-
+      start_pos: parseStartPos(i.start_pos),
       markers: parseMarkers(i.markers)
     }));
   }

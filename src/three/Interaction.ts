@@ -17,6 +17,9 @@ export class MarkerPickingController {
 
   private onMarkerClick?: (index: number) => void;
   private onPlaceClick?: () => void;
+  private interestPointObject?: THREE.Object3D;
+  private onInterestPointClick?: () => void;
+  private enabled = true;
 
   constructor(opts: {
     dom: HTMLElement;
@@ -25,6 +28,8 @@ export class MarkerPickingController {
     moveThresholdPx?: number;
     onMarkerClick?: (index: number) => void;
     onPlaceClick?: () => void;
+    interestPointObject?: THREE.Object3D;
+    onInterestPointClick?: () => void;
   }) {
     this.dom = opts.dom;
     this.camera = opts.camera;
@@ -32,6 +37,9 @@ export class MarkerPickingController {
     this.moveThresholdPx = opts.moveThresholdPx ?? 5;
     this.onMarkerClick = opts.onMarkerClick;
     this.onPlaceClick = opts.onPlaceClick;
+    this.interestPointObject = opts.interestPointObject;
+    this.onInterestPointClick = opts.onInterestPointClick;
+    this.raycaster.params.Line = { threshold: 0.08 };
 
     this.dom.addEventListener("pointerdown", this.onDown);
     this.dom.addEventListener("pointermove", this.onMove);
@@ -39,9 +47,27 @@ export class MarkerPickingController {
     this.dom.addEventListener("pointercancel", this.onUp);
   }
 
-  setEditorCallbacks(callbacks: { onMarkerClick?: (index: number) => void; onPlaceClick?: () => void }) {
+  setEditorCallbacks(callbacks: {
+    onMarkerClick?: (index: number) => void;
+    onPlaceClick?: () => void;
+    onInterestPointClick?: () => void;
+  }) {
     this.onMarkerClick = callbacks.onMarkerClick;
     this.onPlaceClick = callbacks.onPlaceClick;
+    this.onInterestPointClick = callbacks.onInterestPointClick;
+  }
+
+  setInterestPointObject(object: THREE.Object3D | undefined) {
+    this.interestPointObject = object;
+  }
+
+  setEnabled(enabled: boolean) {
+    this.enabled = enabled;
+    if (!enabled) {
+      this.isDown = false;
+      this.downHit = null;
+      this.movedTooMuch = false;
+    }
   }
 
   dispose() {
@@ -59,14 +85,24 @@ export class MarkerPickingController {
     this.pointerNdc.set(x, y);
     this.raycaster.setFromCamera(this.pointerNdc, this.camera);
 
-    const hits = this.raycaster.intersectObjects(
-      [...this.markers.getPickableObjects()],
-      false
-    );
-    return hits.length ? hits[0].object : null;
+    const pickables: THREE.Object3D[] = [...this.markers.getPickableObjects()];
+    if (this.interestPointObject && this.onInterestPointClick) {
+      pickables.push(this.interestPointObject);
+    }
+
+    const hits = this.raycaster.intersectObjects(pickables, true);
+    if (!hits.length) return null;
+
+    const hitObject = hits[0].object;
+    if (this.interestPointObject && this.isDescendantOf(hitObject, this.interestPointObject)) {
+      return this.interestPointObject;
+    }
+
+    return hitObject;
   }
 
   private onDown = (ev: PointerEvent) => {
+    if (!this.enabled) return;
     if (ev.button !== 0) return;
 
     this.isDown = true;
@@ -79,6 +115,7 @@ export class MarkerPickingController {
   };
 
   private onMove = (ev: PointerEvent) => {
+    if (!this.enabled) return;
     if (!this.isDown) return;
 
     const dx = ev.clientX - this.downX;
@@ -88,6 +125,7 @@ export class MarkerPickingController {
   };
 
   private onUp = (ev: PointerEvent) => {
+    if (!this.enabled) return;
     if (!this.isDown) return;
     this.isDown = false;
 
@@ -111,6 +149,11 @@ export class MarkerPickingController {
 
     const sprites = this.markers.getSprites();
 
+    if (this.interestPointObject && downHit === this.interestPointObject && this.onInterestPointClick) {
+      this.onInterestPointClick?.();
+      return;
+    }
+
     // label sprite (not in sprites) -> close
     if (!sprites.includes(downHit as THREE.Sprite)) {
       this.markers.removeLabel();
@@ -126,4 +169,13 @@ export class MarkerPickingController {
     // marker sprite -> toggle 
     this.markers.toggleLabelForSprite(downHit as THREE.Sprite, this.camera);
   };
+
+  private isDescendantOf(object: THREE.Object3D, root: THREE.Object3D): boolean {
+    let current: THREE.Object3D | null = object;
+    while (current) {
+      if (current === root) return true;
+      current = current.parent;
+    }
+    return false;
+  }
 }

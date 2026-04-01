@@ -31,8 +31,30 @@ type EditorMarker = {
 type Pin = {
   title: string;
   path: string;
+  start_pos?: unknown;
   markers?: Array<Record<string, unknown>>;
 };
+
+function parseStartPos(raw: unknown): [number, number, number] | null {
+  if (Array.isArray(raw) && raw.length >= 3) {
+    const [x, y, z] = raw;
+    if ([x, y, z].every((value) => typeof value === "number" && Number.isFinite(value))) {
+      return [x, y, z];
+    }
+  }
+
+  if (raw && typeof raw === "object") {
+    const pos = raw as { x?: unknown; y?: unknown; z?: unknown };
+    const x = toFiniteNumber(pos.x);
+    const y = toFiniteNumber(pos.y);
+    const z = toFiniteNumber(pos.z);
+    if (x !== null && y !== null && z !== null) {
+      return [x, y, z];
+    }
+  }
+
+  return null;
+}
 
 function backendMarkersToEditorMarkers(raw: MarkerPayload[] | undefined): EditorMarker[] {
   if (!raw || !Array.isArray(raw)) return [];
@@ -139,6 +161,19 @@ function toFiniteNumber(value: unknown): number | null {
   return null;
 }
 
+function formatCoordinateForInput(value: number | undefined): string {
+  const numericValue = typeof value === "number" && Number.isFinite(value) ? value : 0;
+  return numericValue.toFixed(2);
+}
+
+function roundCoordinate(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function isCoordinateDraft(value: string): boolean {
+  return /^-?\d*(?:\.\d*)?$/.test(value.trim());
+}
+
 function parseMarkerFormParam(raw: string | null): EditorMarker | null {
   if (!raw) return null;
   try {
@@ -162,6 +197,28 @@ function parseMarkerFormParam(raw: string | null): EditorMarker | null {
   }
 }
 
+async function fetchFieldById(fieldId: string): Promise<AdminField | null> {
+  const baseUrl = import.meta.env.VITE_API_URL as string;
+  const res = await awsClient.fetch(`${baseUrl}/fields/${encodeURIComponent(fieldId)}`, {
+    method: "GET",
+  });
+
+  if (res.status === 404) return null;
+
+  const raw = await res.text();
+  if (!res.ok) {
+    throw new Error(`${res.status} ${res.statusText}: ${raw || "Failed to load field."}`);
+  }
+
+  const field = raw ? (JSON.parse(raw) as AdminField) : null;
+  console.log("[Editor start_pos debug] fetched field", {
+    fieldId,
+    start_pos: field?.start_pos,
+    markersCount: Array.isArray(field?.markers) ? field.markers.length : 0,
+  });
+  return field;
+}
+
 export default function Editor() {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const appRef = useRef<ThreeApp | null>(null);
@@ -178,6 +235,8 @@ export default function Editor() {
   const [selectedPinIndex, setSelectedPinIndex] = useState<number>(0);
   const [markers, setMarkers] = useState<EditorMarker[]>([]);
   const [mode, setMode] = useState<"preview" | "place" | "edit">("preview");
+  const [editTarget, setEditTarget] = useState<"marker" | "interest" | null>(null);
+  const prevModeRef = useRef<typeof mode>(mode);
   const [placementDistance, setPlacementDistance] = useState(PLACEMENT_DISTANCE_DEFAULT);
   const [selectedMarkerIndex, setSelectedMarkerIndex] = useState<number | null>(null);
   const [placementIconIndex, setPlacementIconIndex] = useState(0);
@@ -188,6 +247,8 @@ export default function Editor() {
   const [fieldError, setFieldError] = useState("");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
   const [saveMessage, setSaveMessage] = useState("");
+  const [positionDrafts, setPositionDrafts] = useState<[string, string, string]>(["0.00", "0.00", "0.00"]);
+  const [axisStartPos, setAxisStartPos] = useState<[number, number, number] | null>(null);
 
   const syncMarkersToApp = useCallback(() => {
     if (!appRef.current) return;
@@ -202,9 +263,10 @@ export default function Editor() {
             label: "",
           }
         : undefined;
-    const selectedIndex = mode === "edit" ? selectedMarkerIndex : undefined;
+    const selectedIndex =
+      mode === "edit" && editTarget !== "interest" ? selectedMarkerIndex : undefined;
     appRef.current.setWorldMarkers(input, preview, selectedIndex);
-  }, [markers, mode, placementRadius, placementIconIndex, selectedMarkerIndex]);
+  }, [markers, mode, placementRadius, placementIconIndex, selectedMarkerIndex, editTarget]);
 
   const placeMarkerAtCurrentPreview = useCallback(() => {
     if (!appRef.current) return;
@@ -223,6 +285,7 @@ export default function Editor() {
     if (!wrapRef.current) return;
     const app = new ThreeApp(wrapRef.current, { defaultControlMode });
     appRef.current = app;
+    app.setWorldAxesPosition(axisStartPos ?? [0, 0, 0]);
 
     const pathFromUrl = gaussianPathParam;
     const markersParam = searchParams.get("markers");
@@ -247,7 +310,7 @@ export default function Editor() {
       const singleMarker = parseMarkerFormParam(markerParam);
       if (singleMarker) {
         setMarkers([singleMarker]);
-        setSelectedMarkerIndex(0);
+        setSelectedMarkerIndex(null);
       }
     }
 
@@ -262,6 +325,7 @@ export default function Editor() {
       setManagedField(null);
       setFieldStatus("idle");
       setFieldError("");
+      setAxisStartPos(null);
       return;
     }
 
@@ -271,10 +335,8 @@ export default function Editor() {
 
     (async () => {
       try {
-        const data = await listFields();
+        const field = await fetchFieldById(fieldId);
         if (cancelled) return;
-        const items = (data.items ?? []) as AdminField[];
-        const field = items.find((item) => item.FieldID === fieldId);
         if (!field) {
           setFieldStatus("error");
           setFieldError(`Field "${fieldId}" not found.`);
@@ -282,10 +344,13 @@ export default function Editor() {
         }
         setManagedField(field);
         setFieldStatus("ready");
+        setAxisStartPos(parseStartPos(field.start_pos));
         const backendMarkers = Array.isArray(field.markers) ? (field.markers as MarkerPayload[]) : [];
         const nextMarkers = backendMarkersToEditorMarkers(backendMarkers);
         setMarkers(nextMarkers);
-        setSelectedMarkerIndex(nextMarkers.length ? 0 : null);
+        const nextSelectedIndex = null;
+        setSelectedMarkerIndex(nextSelectedIndex);
+        setEditTarget(nextSelectedIndex !== null ? "marker" : null);
         if (!gaussianPathParam) {
           const filePath = field.File?.trim();
           if (filePath) {
@@ -320,25 +385,95 @@ export default function Editor() {
   }, [syncMarkersToApp]);
 
   useEffect(() => {
+    appRef.current?.setWorldAxesPosition(axisStartPos ?? [0, 0, 0]);
+  }, [axisStartPos]);
+
+  useEffect(() => {
+    if (selectedMarkerIndex === null || !markers[selectedMarkerIndex]) {
+      setPositionDrafts(["0.00", "0.00", "0.00"]);
+      return;
+    }
+
+    const selectedMarker = markers[selectedMarkerIndex];
+    setPositionDrafts([
+      formatCoordinateForInput(selectedMarker.position[0]),
+      formatCoordinateForInput(selectedMarker.position[1]),
+      formatCoordinateForInput(selectedMarker.position[2]),
+    ]);
+  }, [selectedMarkerIndex]);
+
+  useEffect(() => {
+    if (mode === "edit" && prevModeRef.current !== "edit") {
+      setSelectedMarkerIndex(null);
+      setEditTarget(null);
+    }
+    prevModeRef.current = mode;
+  }, [mode]);
+
+  useEffect(() => {
     if (!appRef.current) return;
+    appRef.current.setWorldAxesVisible(true);
 
     if (mode === "preview") {
       appRef.current.setPlacementDistance(0);
       appRef.current.setEditorCallbacks({});
+      appRef.current.setMarkerEditing(null);
+      appRef.current.setInterestPointEditing(false);
+      setEditTarget(null);
     } else if (mode === "place") {
       appRef.current.setPlacementDistance(placementDistance);
-      appRef.current.setEditorCallbacks({
-        onPlaceClick: () => {
-          placeMarkerAtCurrentPreview();
-        },
-      });
-    } else {
+      appRef.current.setEditorCallbacks({});
+      appRef.current.setMarkerEditing(null);
+      appRef.current.setInterestPointEditing(false);
+      setEditTarget(null);
+    } else if (mode === "edit") {
       appRef.current.setPlacementDistance(0);
       appRef.current.setEditorCallbacks({
-        onMarkerClick: (index) => setSelectedMarkerIndex(index),
+        onMarkerClick: (index) => {
+          setSelectedMarkerIndex(index);
+          setEditTarget("marker");
+        },
+        onInterestPointClick: () => {
+          setEditTarget("interest");
+        },
       });
+      if (editTarget === "interest") {
+        appRef.current.setMarkerEditing(null);
+        appRef.current.setInterestPointEditing(true, (position) => {
+          console.log("[Editor start_pos debug] interest point moved", {
+            fieldId,
+            position,
+          });
+          setAxisStartPos(position);
+        });
+      } else {
+        appRef.current.setMarkerEditing(
+          selectedMarkerIndex,
+          (position) => {
+            const roundedPosition = position.map((value) => roundCoordinate(value)) as [
+              number,
+              number,
+              number,
+            ];
+            if (selectedMarkerIndex === null) return;
+            setMarkers((prev) => {
+              const next = [...prev];
+              const marker = next[selectedMarkerIndex];
+              if (!marker) return prev;
+              next[selectedMarkerIndex] = { ...marker, position: roundedPosition };
+              return next;
+            });
+            setPositionDrafts(roundedPosition.map((value) => formatCoordinateForInput(value)) as [
+              string,
+              string,
+              string,
+            ]);
+          }
+        );
+        appRef.current.setInterestPointEditing(false);
+      }
     }
-  }, [mode, placementDistance, placeMarkerAtCurrentPreview]);
+  }, [mode, placementDistance, selectedMarkerIndex, editTarget]);
 
   useEffect(() => {
     const next = pins.length;
@@ -357,8 +492,10 @@ export default function Editor() {
           ? new URL(pin.path, window.location.origin).href
           : pin.path
         : new URL(pin.path, window.location.href).href;
+    setAxisStartPos(parseStartPos(pin.start_pos));
     setMarkers(parseApiMarkers(pin.markers ?? []));
     setSelectedMarkerIndex(null);
+    setEditTarget(null);
     appRef.current?.loadGaussianScene(resolved);
   }, [pins, selectedPinIndex, gaussianPathParam, isFieldManagement]);
 
@@ -368,10 +505,11 @@ export default function Editor() {
     //   .then((r) => r.json())
     fetch(`${import.meta.env.VITE_API_URL}/pins`, { method: "GET" })
       .then((r) => r.json())
-      .then((data: Array<{ title?: string; path?: string; markers?: Array<Record<string, unknown>> }>) => {
+      .then((data: Array<{ title?: string; path?: string; start_pos?: unknown; markers?: Array<Record<string, unknown>> }>) => {
         const next: Pin[] = (data ?? []).map((p) => ({
           title: p.title ?? "",
           path: p.path ?? "",
+          start_pos: p.start_pos,
           markers: p.markers ?? [],
         }));
         setPins(next);
@@ -383,21 +521,129 @@ export default function Editor() {
   }, [searchParams]);
 
   const handleSaveMarkers = useCallback(async () => {
-    if (!fieldId) return;
+    console.log("[Editor start_pos debug] save handler invoked", {
+      fieldId,
+      fieldStatus,
+      saveStatus,
+      axisStartPos,
+      markersCount: markers.length,
+    });
+    if (!fieldId) {
+      console.warn("[Editor start_pos debug] save aborted: missing fieldId");
+      return;
+    }
     setSaveStatus("saving");
     setSaveMessage("");
     try {
-      const payload = editorMarkersToBackend(markers);
-      await updateFieldMarkers(fieldId, payload);
+      const markerPayload = editorMarkersToBackend(markers);
+      const nextStartPos = axisStartPos ?? [0, 0, 0];
+      const startPosPayload = {
+        x: roundCoordinate(nextStartPos[0]),
+        y: roundCoordinate(nextStartPos[1]),
+        z: roundCoordinate(nextStartPos[2]),
+      };
+      console.log("[Editor start_pos debug] saving field", {
+        fieldId,
+        start_pos: startPosPayload,
+        markersCount: markerPayload.length,
+      });
+      await updateField(fieldId, {
+        markers: markerPayload,
+        start_pos: startPosPayload,
+      });
+      console.log("[Editor start_pos debug] save request completed", { fieldId });
+      const refreshedField = await fetchFieldById(fieldId);
+      const persistedStartPos = parseStartPos(refreshedField?.start_pos);
+      const persistedMarkers = Array.isArray(refreshedField?.markers)
+        ? backendMarkersToEditorMarkers(refreshedField.markers as MarkerPayload[])
+        : markerPayload.map((entry) => ({
+            icon: entry[0],
+            radius: entry[1],
+            position: entry[2],
+            label: entry[3],
+          }));
+      console.log("[Editor start_pos debug] refetched after save", {
+        fieldId,
+        expectedStartPos: startPosPayload,
+        returnedStartPos: refreshedField?.start_pos,
+        parsedReturnedStartPos: persistedStartPos,
+      });
+      if (
+        !persistedStartPos ||
+        persistedStartPos[0] !== startPosPayload.x ||
+        persistedStartPos[1] !== startPosPayload.y ||
+        persistedStartPos[2] !== startPosPayload.z
+      ) {
+        console.warn("[Editor start_pos debug] persisted start_pos does not match saved value", {
+          fieldId,
+          expectedStartPos: startPosPayload,
+          returnedStartPos: refreshedField?.start_pos,
+          parsedReturnedStartPos: persistedStartPos,
+        });
+      }
+
+      if (refreshedField) {
+        setManagedField(refreshedField);
+      }
+      setAxisStartPos(persistedStartPos ?? nextStartPos);
+      setMarkers(persistedMarkers);
       setSaveStatus("success");
-      setSaveMessage("Markers saved.");
+      setSaveMessage("Saved.");
     } catch (error: any) {
+      console.error("[Editor start_pos debug] save failed", error);
       setSaveStatus("error");
-      setSaveMessage(error?.message ? String(error.message) : "Failed to save markers.");
+      setSaveMessage(error?.message ? String(error.message) : "Failed to save.");
     }
-  }, [fieldId, markers]);
+  }, [fieldId, fieldStatus, saveStatus, markers, axisStartPos]);
 
   const selectedMarker = selectedMarkerIndex !== null ? markers[selectedMarkerIndex] : null;
+
+  const handlePositionDraftChange = (axisIndex: number, value: string) => {
+    if (!isCoordinateDraft(value)) return;
+
+    setPositionDrafts((prev) => {
+      const next = [...prev] as [string, string, string];
+      next[axisIndex] = value;
+      return next;
+    });
+  };
+
+  const commitPositionDraft = (axisIndex: number) => {
+    if (selectedMarkerIndex === null) return;
+
+    const draftValue = positionDrafts[axisIndex];
+    const parsedValue = toFiniteNumber(draftValue);
+
+    if (parsedValue === null) {
+      const fallbackValue = selectedMarker?.position[axisIndex];
+      setPositionDrafts((prev) => {
+        const next = [...prev] as [string, string, string];
+        next[axisIndex] = formatCoordinateForInput(fallbackValue);
+        return next;
+      });
+      return;
+    }
+
+    const roundedValue = roundCoordinate(parsedValue);
+    setMarkers((prev) => {
+      const next = [...prev];
+      const marker = next[selectedMarkerIndex];
+      if (!marker) return prev;
+      const position = [...marker.position] as [number, number, number];
+      position[axisIndex] = roundedValue;
+      next[selectedMarkerIndex] = { ...marker, position };
+      return next;
+    });
+    setPositionDrafts((prev) => {
+      const next = [...prev] as [string, string, string];
+      next[axisIndex] = formatCoordinateForInput(roundedValue);
+      return next;
+    });
+  };
+
+  const handlePositionDraftBlur = (axisIndex: number) => {
+    commitPositionDraft(axisIndex);
+  };
 
   return (
     <div className="threeWrap" style={{ display: "flex", flexDirection: "row" }}>
@@ -468,7 +714,11 @@ export default function Editor() {
 
         <h3 style={{ margin: 0, fontSize: "1rem", color: "#e6edf3" }}>Mode</h3>
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-          {(["preview", "place", "edit"] as const).map((m) => (
+          {([
+            ["preview", "Preview"],
+            ["place", "Place"],
+            ["edit", "Edit"],
+          ] as const).map(([m, label]) => (
             <button
               key={m}
               onClick={() => setMode(m)}
@@ -483,7 +733,7 @@ export default function Editor() {
                 cursor: "pointer",
               }}
             >
-              {m}
+              {label}
             </button>
           ))}
         </div>
@@ -559,6 +809,22 @@ export default function Editor() {
             />
           </div>
           </>
+        )}
+
+        {mode === "edit" && (
+          <div
+            style={{
+              padding: "0.75rem",
+              borderRadius: 8,
+              border: "1px solid rgba(255,255,255,0.12)",
+              background: "rgba(255,255,255,0.04)",
+              color: "#b8c2d1",
+              fontSize: "0.82rem",
+              lineHeight: 1.5,
+            }}
+          >
+            Click a marker to move that marker, or click the interest-point axis to move the interest point.
+          </div>
         )}
 
         <h3 style={{ margin: 0, fontSize: "1rem", color: "#e6edf3" }}>Markers ({markers.length})</h3>
@@ -679,18 +945,17 @@ export default function Editor() {
                   <div key={axis}>
                     <label style={{ fontSize: "0.75rem", color: "#9aa4b5" }}>{axis.toUpperCase()}</label>
                     <input
-                      type="number"
-                      step={0.1}
-                      value={selectedMarker.position[i] ?? 0}
-                      onChange={(e) =>
-                        setMarkers((prev) => {
-                          const next = [...prev];
-                          const pos = [...(next[selectedMarkerIndex].position ?? [0, 0, 0])] as [number, number, number];
-                          pos[i] = Number(e.target.value);
-                          next[selectedMarkerIndex] = { ...next[selectedMarkerIndex], position: pos };
-                          return next;
-                        })
-                      }
+                      type="text"
+                      inputMode="decimal"
+                      value={positionDrafts[i]}
+                      onChange={(e) => handlePositionDraftChange(i, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          commitPositionDraft(i);
+                          e.currentTarget.blur();
+                        }
+                      }}
+                      onBlur={() => handlePositionDraftBlur(i)}
                       style={{
                         width: "100%",
                         padding: "0.35rem 0.4rem",
@@ -765,7 +1030,7 @@ export default function Editor() {
                 cursor: fieldStatus !== "ready" || saveStatus === "saving" ? "not-allowed" : "pointer",
               }}
             >
-              {saveStatus === "saving" ? "Saving..." : "Save Markers"}
+              {saveStatus === "saving" ? "Saving..." : "Save"}
             </button>
             {fieldStatus === "loading" && (
               <span style={{ fontSize: "0.8rem", color: "#b8c2d1" }}>Loading field markers...</span>
@@ -774,10 +1039,10 @@ export default function Editor() {
               <span style={{ fontSize: "0.8rem", color: "#fca5a5" }}>{fieldError || "Unable to load field."}</span>
             )}
             {saveStatus === "success" && (
-              <span style={{ fontSize: "0.8rem", color: "#86efac" }}>{saveMessage || "Markers saved."}</span>
+              <span style={{ fontSize: "0.8rem", color: "#86efac" }}>{saveMessage || "Saved."}</span>
             )}
             {saveStatus === "error" && (
-              <span style={{ fontSize: "0.8rem", color: "#fca5a5" }}>{saveMessage || "Failed to save markers."}</span>
+              <span style={{ fontSize: "0.8rem", color: "#fca5a5" }}>{saveMessage || "Failed to save."}</span>
             )}
           </div>
         )}
