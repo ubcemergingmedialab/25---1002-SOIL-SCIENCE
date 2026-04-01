@@ -185,7 +185,11 @@ export default function UBCMap({
 
     (async () => {
       try {
-        const res = await awsClient.fetch(
+        // const res = await awsClient.fetch(
+        //   `${import.meta.env.VITE_API_URL}/pins`,
+        //   { method: "GET" }
+
+        const res = await fetch(
           `${import.meta.env.VITE_API_URL}/pins`,
           { method: "GET" }
         );

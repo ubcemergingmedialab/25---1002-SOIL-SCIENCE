@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { ThreeApp } from "./three/ThreeApp";
 import type { ControlMode } from "./three/ScreenSpace";
 import type { MarkerInput } from "./three/WorldMarkers";
-import { awsClient } from "./lib/awsClient";
+// import { awsClient } from "./lib/awsClient";
 import { listFields, updateFieldMarkers } from "./adminApi";
 import type { Field as AdminField, MarkerPayload } from "./adminApi";
 import "./index.css";
@@ -363,8 +363,10 @@ export default function Editor() {
   }, [pins, selectedPinIndex, gaussianPathParam, isFieldManagement]);
 
   useEffect(() => {
-    awsClient
-      .fetch(`${import.meta.env.VITE_API_URL}/pins`, { method: "GET" })
+    // awsClient
+    //   .fetch(`${import.meta.env.VITE_API_URL}/pins`, { method: "GET" })
+    //   .then((r) => r.json())
+    fetch(`${import.meta.env.VITE_API_URL}/pins`, { method: "GET" })
       .then((r) => r.json())
       .then((data: Array<{ title?: string; path?: string; markers?: Array<Record<string, unknown>> }>) => {
         const next: Pin[] = (data ?? []).map((p) => ({
