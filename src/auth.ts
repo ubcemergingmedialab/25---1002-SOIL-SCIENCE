@@ -8,6 +8,7 @@ import { Amplify } from "aws-amplify";
  */
 function oauthRedirects(): { signIn: string[]; signOut: string[] } {
   const origin = window.location.origin;
+  console.log("OAUTH SIGN OUT: " + origin);
   return {
     signIn: [`${origin}/admin`],
     signOut: [`${origin}/`],
