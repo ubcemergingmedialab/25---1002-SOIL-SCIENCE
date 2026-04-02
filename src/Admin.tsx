@@ -293,10 +293,10 @@ export default function Admin() {
   }
 
   async function onLogout() {
-    await signOut();
     const domain = "ca-central-1vnlgrfo8k.auth.ca-central-1.amazoncognito.com";
     const clientId = "q7bro5cdr1ucb3g7c00d420q5";
     const logoutUri = "https://main.d18omgvnlk8eo.amplifyapp.com/admin";
+  
     window.location.assign(
       `https://${domain}/logout?client_id=${encodeURIComponent(clientId)}&logout_uri=${encodeURIComponent(logoutUri)}`
     );
