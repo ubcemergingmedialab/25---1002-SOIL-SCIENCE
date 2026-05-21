@@ -58,7 +58,10 @@ const LogLevelNone: number =
 export interface GaussianViewerOptions {
   // Higher = more aggressive culling = faster but more visual holes
   splatAlphaRemovalThreshold?: number;
+  sphericalHarmonicsDegree?: SphericalHarmonicsDegree;
 }
+
+export type SphericalHarmonicsDegree = 0 | 1 | 2;
 
 export type GaussianLoadPhase = "downloading" | "processing" | "finalizing";
 
@@ -97,7 +100,9 @@ export class GaussianViewer {
       sharedMemoryForWorkers: useSharedMemory,
       integerBasedSort: true,
       halfPrecisionCovariancesOnGPU: true,
-      sphericalHarmonicsDegree: 0, // Most splat files don't have SH data anyway
+      // Most splat files don't have SH data anyway. The renderer falls back to
+      // the SH degree present in a loaded splat if this requests more data.
+      sphericalHarmonicsDegree: options.sphericalHarmonicsDegree ?? 0,
       dynamicScene: false,
       freeIntermediateSplatData: true,
       logLevel: LogLevelNone,

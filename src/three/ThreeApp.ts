@@ -5,7 +5,11 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import type { ControlMode, MobileOrbitTool, PerformanceSettings, SceneInfo } from "./ScreenSpace";
 import { ScreenSpaceUI, PERFORMANCE_PRESETS } from "./ScreenSpace";
-import { GaussianViewer, type GaussianLoadProgress } from "./GaussianViewer";
+import {
+  GaussianViewer,
+  type GaussianLoadProgress,
+  type SphericalHarmonicsDegree,
+} from "./GaussianViewer";
 import { WorldMarkers } from "./WorldMarkers";
 import { Skybox } from "./Skybox";
 import { LoadingOverlay } from "./LoadingOverlay";
@@ -25,6 +29,7 @@ type ThreeAppOptions = {
   defaultControlMode?: ControlMode;
   onBack?: () => void;
   sceneInfo?: SceneInfo;
+  sphericalHarmonicsDegree?: SphericalHarmonicsDegree;
 };
 
 export class ThreeApp {
@@ -54,6 +59,7 @@ export class ThreeApp {
   private readonly defaultControlMode: ControlMode;
   private readonly onBack?: () => void;
   private readonly sceneInfo?: SceneInfo;
+  private readonly sphericalHarmonicsDegree: SphericalHarmonicsDegree;
   private flySpeed = 0.5;
   private mobileOrbitTool: MobileOrbitTool = "rotate";
   private screenUI!: ScreenSpaceUI;
@@ -97,6 +103,7 @@ export class ThreeApp {
     this.defaultControlMode = options?.defaultControlMode ?? "orbit";
     this.onBack = options?.onBack;
     this.sceneInfo = options?.sceneInfo;
+    this.sphericalHarmonicsDegree = options?.sphericalHarmonicsDegree ?? 0;
     if (ThreeApp.isMobileLike()) {
       this.perfSettings = PERFORMANCE_PRESETS.low;
     }
@@ -149,6 +156,7 @@ export class ThreeApp {
   private initGaussianViewer() {
     this.gaussian = new GaussianViewer(this.renderer, this.camera, {
       splatAlphaRemovalThreshold: this.perfSettings.splatAlphaRemovalThreshold,
+      sphericalHarmonicsDegree: this.sphericalHarmonicsDegree,
     });
   }
 
@@ -576,6 +584,7 @@ export class ThreeApp {
     // Create new viewer with updated settings
     this.gaussian = new GaussianViewer(this.renderer, this.camera, {
       splatAlphaRemovalThreshold: this.perfSettings.splatAlphaRemovalThreshold,
+      sphericalHarmonicsDegree: this.sphericalHarmonicsDegree,
     });
     
     // Reload scene if one was loaded

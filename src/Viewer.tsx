@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import * as THREE from "three";
 import { fetchFieldById, type Field, type ViewerMarkerPayload } from "./fieldApi";
 import { ThreeApp } from "./three/ThreeApp";
+import type { SphericalHarmonicsDegree } from "./three/GaussianViewer";
 import type { SceneInfo } from "./three/ScreenSpace";
 import "./index.css";
 
@@ -41,6 +42,16 @@ const parseMarkerQueryParam = (raw: string | null): ViewerMarkerPayload[] => {
     console.warn("Failed to parse marker payload", err);
     return [];
   }
+};
+
+const parseSphericalHarmonicsDegree = (
+  raw: string | null
+): SphericalHarmonicsDegree | null => {
+  if (raw === null) return 0;
+  if (raw === "0" || raw === "1" || raw === "2") {
+    return Number(raw) as SphericalHarmonicsDegree;
+  }
+  return null;
 };
 
 const parseStartPos = (raw: unknown): [number, number, number] | null => {
@@ -88,7 +99,14 @@ const getFieldSceneInfo = (field: Field): SceneInfo => ({
 const getFieldMarkers = (field: Field) => field.markers ?? field.Markers ?? [];
 
 type ViewerLoadState =
-  | { status: "ready"; gaussianPath?: string; markers: ViewerMarkerPayload[]; startPos?: unknown; sceneInfo: SceneInfo }
+  | {
+      status: "ready";
+      gaussianPath?: string;
+      markers: ViewerMarkerPayload[];
+      startPos?: unknown;
+      sceneInfo: SceneInfo;
+      sphericalHarmonicsDegree: SphericalHarmonicsDegree;
+    }
   | { status: "loading" }
   | { status: "error"; title: string; message: string };
 
@@ -99,6 +117,16 @@ export default function Viewer({ gaussianPath, markers, startPos, sceneInfo, onB
   const [loadState, setLoadState] = useState<ViewerLoadState>({ status: "loading" });
 
   useEffect(() => {
+    const sphericalHarmonicsDegree = parseSphericalHarmonicsDegree(searchParams.get("sh"));
+    if (sphericalHarmonicsDegree === null) {
+      setLoadState({
+        status: "error",
+        title: "Invalid spherical harmonics degree",
+        message: 'The "sh" query parameter must be a number in the range 0-2.',
+      });
+      return;
+    }
+
     if (gaussianPath) {
       setLoadState({
         status: "ready",
@@ -121,6 +149,7 @@ export default function Viewer({ gaussianPath, markers, startPos, sceneInfo, onB
           location: searchParams.get("sceneLocation") ?? searchParams.get("location") ?? undefined,
           description: searchParams.get("description") ?? undefined,
         },
+        sphericalHarmonicsDegree,
       });
       return;
     }
@@ -168,6 +197,7 @@ export default function Viewer({ gaussianPath, markers, startPos, sceneInfo, onB
           markers: getFieldMarkers(field),
           startPos: field.start_pos,
           sceneInfo: getFieldSceneInfo(field),
+          sphericalHarmonicsDegree,
         });
       } catch (err) {
         if (cancelled) return;
@@ -187,7 +217,11 @@ export default function Viewer({ gaussianPath, markers, startPos, sceneInfo, onB
 
   useEffect(() => {
     if (!wrapRef.current || loadState.status !== "ready") return;
-    const app = new ThreeApp(wrapRef.current, { onBack, sceneInfo: loadState.sceneInfo });
+    const app = new ThreeApp(wrapRef.current, {
+      onBack,
+      sceneInfo: loadState.sceneInfo,
+      sphericalHarmonicsDegree: loadState.sphericalHarmonicsDegree,
+    });
     const parsedStartPos = parseStartPos(loadState.startPos);
     console.log("[Viewer start_pos debug] resolved viewer start position", {
       gaussianPath: loadState.gaussianPath,
