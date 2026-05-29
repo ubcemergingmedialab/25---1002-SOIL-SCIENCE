@@ -1,28 +1,15 @@
 import { fetchAuthSession } from "aws-amplify/auth";
-import type { MarkerLabel } from "./markerLabel";
+import type {
+  AdminField,
+  ListFieldsResponse,
+  MarkerPayload,
+  MutateFieldResponse,
+} from "@soil/shared/types/fields";
 
-const BASE = import.meta.env.VITE_API_URL as string;
+const BASE = import.meta.env.VITE_ADMIN_API_URL as string | undefined;
 
-export type Field = {
-  FieldID: string;
-  Name: string;
-  Description?: string;
-  File?: string;
-  Latitude?: number;
-  Longitude?: number;
-  Thumbnail?: string;
-  ThumbnailAlt?: string;
-  start_pos?: unknown;
-  markers?: unknown;
-};
-
-export type MarkerPayload = [
-  string,
-  number,
-  [number, number, number],
-  [number, number, number],
-  MarkerLabel,
-];
+export type Field = AdminField;
+export type { MarkerPayload };
 
 export type CreateFieldPayload = Field;
 
@@ -38,12 +25,17 @@ async function authHeader() {
   return { Authorization: `Bearer ${token}` };
 }
 
+function requireBaseUrl(): string {
+  if (!BASE) throw new Error("VITE_ADMIN_API_URL is not configured.");
+  return BASE;
+}
+
 async function apiFetch<T>(
   path: string,
   init: RequestInit = {}
 ): Promise<T> {
   const headers = await authHeader();
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await fetch(`${requireBaseUrl()}${path}`, {
     ...init,
     headers: {
       ...headers,
@@ -75,11 +67,18 @@ async function apiFetch<T>(
 }
 
 export async function listFields() {
-  return apiFetch<{ items: unknown[] }>("/admin/api/fields");
+  return apiFetch<ListFieldsResponse>("/admin/api/fields");
+}
+
+export async function getField(fieldId: string): Promise<Field | null> {
+  const requested = fieldId.trim();
+  if (!requested) return null;
+  const data = await listFields();
+  return data.items.find((item) => item.FieldID === requested) ?? null;
 }
 
 export async function createField(payload: CreateFieldPayload) {
-  return apiFetch<{ item: unknown }>("/admin/api/fields", {
+  return apiFetch<MutateFieldResponse>("/admin/api/fields", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
@@ -91,7 +90,7 @@ export async function createField(payload: CreateFieldPayload) {
  * so FieldID must be in the JSON body.
  */
 export async function updateField(fieldId: string, payload: UpdateFieldPayload) {
-  return apiFetch<{ item: unknown }>("/admin/api/fields", {
+  return apiFetch<MutateFieldResponse>("/admin/api/fields", {
     method: "PUT",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({

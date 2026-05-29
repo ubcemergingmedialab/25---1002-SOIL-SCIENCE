@@ -1,0 +1,13 @@
+{
+  "name": "@soil/shared",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles.css",
+    "./types/*": "./src/types/*",
+    "./utils/*": "./src/utils/*",
+    "./three/*": "./src/three/*"
+  }
+}

@@ -2,15 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import * as THREE from "three";
-import { ThreeApp } from "./three/ThreeApp";
-import type { ControlMode } from "./three/ScreenSpace";
-import type { MarkerInput } from "./three/WorldMarkers";
-// import { awsClient } from "./lib/awsClient";
-// import { listFields, updateFieldMarkers } from "./adminApi";
-import { updateField } from "./adminApi";
+import { ThreeApp } from "@soil/shared/three/ThreeApp";
+import type { ControlMode } from "@soil/shared/three/ScreenSpace";
+import type { MarkerInput } from "@soil/shared/three/WorldMarkers";
+// import { updateFieldMarkers } from "./adminApi";
+import { getField, listFields, updateField } from "./adminApi";
 import type { Field as AdminField, MarkerPayload } from "./adminApi";
-import { normalizeMarkerLabel, type MarkerLabel } from "./markerLabel";
-import "./index.css";
+import { normalizeMarkerLabel, type MarkerLabel } from "@soil/shared/types/markerLabel";
+import "@soil/shared/styles.css";
 
 const PLACEMENT_DISTANCE_DEFAULT = 1;
 
@@ -36,7 +35,7 @@ type Pin = {
   title: string;
   path: string;
   start_pos?: unknown;
-  markers?: Array<Record<string, unknown>>;
+  markers?: unknown[];
 };
 
 function parseStartPos(raw: unknown): [number, number, number] | null {
@@ -253,23 +252,6 @@ function parseMarkerFormParam(raw: string | null): EditorMarker | null {
   }
 }
 
-async function fetchFieldById(fieldId: string): Promise<AdminField | null> {
-  const baseUrl = import.meta.env.VITE_API_URL as string;
-  const res = await fetch(`${baseUrl}/fields/${encodeURIComponent(fieldId)}`, {
-    method: "GET",
-  });
-
-  if (res.status === 404) return null;
-
-  const raw = await res.text();
-  if (!res.ok) {
-    throw new Error(`${res.status} ${res.statusText}: ${raw || "Failed to load field."}`);
-  }
-
-  const field = raw ? (JSON.parse(raw) as AdminField) : null;
-  return field;
-}
-
 export default function Editor() {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const appRef = useRef<ThreeApp | null>(null);
@@ -458,7 +440,7 @@ export default function Editor() {
 
     (async () => {
       try {
-        const field = await fetchFieldById(fieldId);
+        const field = await getField(fieldId);
         if (cancelled) return;
         if (!field) {
           setFieldStatus("error");
@@ -610,7 +592,10 @@ export default function Editor() {
           : pin.path
         : new URL(pin.path, window.location.href).href;
     setAxisStartPos(parseStartPos(pin.start_pos));
-    const nextMarkers = parseApiMarkers(pin.markers ?? [], getCurrentCameraPosition());
+    const rawMarkers = pin.markers ?? [];
+    const nextMarkers = rawMarkers.some(Array.isArray)
+      ? backendMarkersToEditorMarkers(rawMarkers, getCurrentCameraPosition())
+      : parseApiMarkers(rawMarkers as Array<Record<string, unknown>>, getCurrentCameraPosition());
     setMarkers(nextMarkers);
     setSavedMarkers(cloneEditorMarkers(nextMarkers));
     setSelectedMarkerIndex(null);
@@ -618,24 +603,20 @@ export default function Editor() {
   }, [pins, selectedPinIndex, gaussianPathParam, getCurrentCameraPosition, isFieldManagement]);
 
   useEffect(() => {
-    // awsClient
-    //   .fetch(`${import.meta.env.VITE_API_URL}/pins`, { method: "GET" })
-    //   .then((r) => r.json())
-    fetch(`${import.meta.env.VITE_API_URL}/pins`, { method: "GET" })
-      .then((r) => r.json())
-      .then((data: Array<{ title?: string; path?: string; start_pos?: unknown; markers?: Array<Record<string, unknown>> }>) => {
-        const next: Pin[] = (data ?? []).map((p) => ({
-          title: p.title ?? "",
-          path: p.path ?? "",
-          start_pos: p.start_pos,
-          markers: p.markers ?? [],
+    listFields()
+      .then((data) => {
+        const next: Pin[] = data.items.map((field) => ({
+          title: field.Name || field.FieldID,
+          path: field.File ?? "",
+          start_pos: field.start_pos,
+          markers: Array.isArray(field.markers) ? field.markers : [],
         }));
         setPins(next);
         if (next.length > 0 && !searchParams.get("gaussianPath") && !searchParams.get("path")) {
           setSelectedPinIndex(0);
         }
       })
-      .catch((err) => console.error("Failed to load pins for editor", err));
+      .catch((err) => console.error("Failed to load fields for editor", err));
   }, [searchParams]);
 
   const handleSaveMarkers = useCallback(async () => {
@@ -656,7 +637,7 @@ export default function Editor() {
         markers: markerPayload,
         start_pos: startPosPayload,
       });
-      const refreshedField = await fetchFieldById(fieldId);
+      const refreshedField = await getField(fieldId);
       const persistedStartPos = parseStartPos(refreshedField?.start_pos);
       const persistedMarkers = Array.isArray(refreshedField?.markers)
         ? backendMarkersToEditorMarkers(refreshedField.markers as MarkerPayload[], getCurrentCameraPosition())

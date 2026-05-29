@@ -1,7 +1,7 @@
 import { type CSSProperties, type FormEvent, Fragment, useEffect, useState } from "react";
 import { fetchAuthSession, signInWithRedirect } from "aws-amplify/auth";
 import { type CreateFieldPayload, type MarkerPayload, createField, deleteField, listFields, updateField } from "./adminApi";
-import { normalizeMarkerLabel } from "./markerLabel";
+import { normalizeMarkerLabel } from "@soil/shared/types/markerLabel";
 
 type FieldItem = {
   FieldID: string;
@@ -293,9 +293,14 @@ export default function Admin() {
   }
 
   async function onLogout() {
-    const domain = "ca-central-1vnlgrfo8k.auth.ca-central-1.amazoncognito.com";
-    const clientId = "q7bro5cdr1ucb3g7c00d420q5";
-    const logoutUri = "https://main.d18omgvnlk8eo.amplifyapp.com";
+    const domain = import.meta.env.VITE_COGNITO_DOMAIN as string | undefined;
+    const clientId = import.meta.env.VITE_COGNITO_CLIENT_ID as string | undefined;
+    const logoutUri = import.meta.env.VITE_COGNITO_REDIRECT_SIGN_OUT || window.location.origin;
+
+    if (!domain || !clientId) {
+      setErr("Cognito logout is not configured.");
+      return;
+    }
   
     window.location.assign(
       `https://${domain}/logout?client_id=${encodeURIComponent(clientId)}&logout_uri=${encodeURIComponent(logoutUri)}`

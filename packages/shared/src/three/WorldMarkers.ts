@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { normalizeMarkerLabel, type MarkerLabel } from "../markerLabel";
+import { normalizeMarkerLabel, type MarkerLabel } from "../types/markerLabel";
 
 type MarkerPosition = THREE.Vector3 | [number, number, number];
 

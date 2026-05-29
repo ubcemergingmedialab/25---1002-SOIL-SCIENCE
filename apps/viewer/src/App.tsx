@@ -1,4 +1,4 @@
-import "./index.css";
+import "@soil/shared/styles.css";
 
 export default function App() {
   return (

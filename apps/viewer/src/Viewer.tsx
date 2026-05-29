@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import * as THREE from "three";
-import { fetchFieldById, type Field, type ViewerMarkerPayload } from "./fieldApi";
-import { ThreeApp } from "./three/ThreeApp";
-import type { SphericalHarmonicsDegree } from "./three/GaussianViewer";
-import type { SceneInfo } from "./three/ScreenSpace";
-import { normalizeMarkerLabel } from "./markerLabel";
-import "./index.css";
+import { getFieldById, type Field, type ViewerMarkerPayload } from "./publicApi";
+import { ThreeApp } from "@soil/shared/three/ThreeApp";
+import type { SphericalHarmonicsDegree } from "@soil/shared/three/GaussianViewer";
+import type { SceneInfo } from "@soil/shared/three/ScreenSpace";
+import { normalizeMarkerLabel } from "@soil/shared/types/markerLabel";
+import "@soil/shared/styles.css";
 
 // narrows to objects that have setGaussianPath
 function hasSetGaussianPath(
@@ -205,7 +205,7 @@ export default function Viewer({ gaussianPath, markers, startPos, sceneInfo, onB
 
     (async () => {
       try {
-        const field = await fetchFieldById(fieldId);
+        const field = await getFieldById(fieldId);
         if (cancelled) return;
 
         if (!field) {

@@ -9,6 +9,11 @@
     "skipLibCheck": true,
 
     /* Bundler mode */
+    "baseUrl": ".",
+    "paths": {
+      "@soil/shared": ["packages/shared/src/index.ts"],
+      "@soil/shared/*": ["packages/shared/src/*"]
+    },
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
@@ -24,5 +29,6 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src"]
+  "include": ["apps", "packages/shared/src"],
+  "exclude": ["dist", "node_modules"]
 }

@@ -8,24 +8,32 @@ import { Amplify } from "aws-amplify";
  */
 function oauthRedirects(): { signIn: string[]; signOut: string[] } {
   const origin = window.location.origin;
-  console.log("OAUTH SIGN OUT: " + origin);
   return {
-    signIn: [`${origin}/admin`],
-    signOut: [`${origin}/`],
+    signIn: [import.meta.env.VITE_COGNITO_REDIRECT_SIGN_IN || `${origin}/admin`],
+    signOut: [import.meta.env.VITE_COGNITO_REDIRECT_SIGN_OUT || `${origin}/`],
   };
 }
 
 const { signIn, signOut } = oauthRedirects();
+const userPoolClientId = import.meta.env.VITE_COGNITO_CLIENT_ID as string | undefined;
+const userPoolId = import.meta.env.VITE_COGNITO_USER_POOL_ID as string | undefined;
+const domain = import.meta.env.VITE_COGNITO_DOMAIN as string | undefined;
+
+if (!userPoolClientId || !userPoolId || !domain) {
+  throw new Error(
+    "Admin app Cognito env is incomplete. Set VITE_COGNITO_USER_POOL_ID, VITE_COGNITO_CLIENT_ID, and VITE_COGNITO_DOMAIN."
+  );
+}
 
 Amplify.configure({
   Auth: {
     Cognito: {
-      userPoolClientId: "q7bro5cdr1ucb3g7c00d420q5",
-      userPoolId: "ca-central-1_VnLGRFo8k",
+      userPoolClientId,
+      userPoolId,
 
       loginWith: {
         oauth: {
-          domain: "ca-central-1vnlgrfo8k.auth.ca-central-1.amazoncognito.com",
+          domain,
           scopes: ["openid", "email"],
           redirectSignIn: signIn,
           redirectSignOut: signOut,
