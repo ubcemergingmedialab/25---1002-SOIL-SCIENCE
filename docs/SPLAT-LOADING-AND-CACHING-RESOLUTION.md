@@ -151,6 +151,7 @@ These were **separate** from splat CDN but showed up in the same period:
 | `GET /pins` returned 0 items | Lambda `PINS_FIELD_IDS`: `*` = all fields (not literal `FieldID`) |
 | Splats 403 from S3 | `enable_public_read` bucket policy on assets bucket |
 | Admin local CORS | Add `http://localhost:5174` to `cors_allow_origins` in Terraform |
+| Admin splat fetch CORS (`ACAO` = viewer origin) | Assets CDN used `CachingOptimized` without a response headers policy — S3 CORS was cached per object. Attach `aws_cloudfront_response_headers_policy` with `origin_override = true` and the same `cors_allow_origins` list (Terraform `s3-assets-bucket` module). |
 | Viewer deploy `VITE_PUBLIC_API_URL` | Build-time env in `apps/viewer/.env` or repo root `.env` with `envDir` |
 
 ---
@@ -189,6 +190,7 @@ assets_enable_public_read  = true   # → false when all URLs use assets_cdn_url
 - [ ] Verify Range (`206`) and repeat-visit cache in DevTools
 - [ ] Set `assets_enable_public_read = false` and re-apply when cutover complete
 - [ ] Ensure `cors_allow_origins` includes viewer (and admin) CloudFront URLs + localhost dev ports
+- [ ] Assets CDN: response headers policy for CORS (`origin_override`) when both viewer and admin load splats cross-origin
 
 ---
 

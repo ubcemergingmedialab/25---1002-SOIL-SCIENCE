@@ -1,7 +1,7 @@
 import { type CSSProperties, type FormEvent, Fragment, useEffect, useState } from "react";
-import { fetchAuthSession, signInWithRedirect } from "aws-amplify/auth";
+import { fetchAuthSession, signInWithRedirect, signOut } from "aws-amplify/auth";
+import { getCognitoSignOutRedirect } from "./auth";
 import { type CreateFieldPayload, type MarkerPayload, createField, deleteField, listFields, updateField } from "./adminApi";
-import { appOrigin, cognitoClientId, cognitoOAuthDomain } from "@soil/shared/lib/env";
 import { normalizeMarkerLabel } from "@soil/shared/types/markerLabel";
 
 type FieldItem = {
@@ -294,13 +294,16 @@ export default function Admin() {
   }
 
   async function onLogout() {
-    const domain = cognitoOAuthDomain();
-    const clientId = cognitoClientId();
-    const logoutUri = appOrigin();
-
-    window.location.assign(
-      `https://${domain}/logout?client_id=${encodeURIComponent(clientId)}&logout_uri=${encodeURIComponent(logoutUri)}`,
-    );
+    try {
+      await signOut({
+        global: false,
+        oauth: {
+          redirectUrl: getCognitoSignOutRedirect(),
+        },
+      });
+    } catch (e: unknown) {
+      setErr(String(e));
+    }
   }
 
   // While checking auth, render nothing (no flash)

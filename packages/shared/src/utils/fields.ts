@@ -26,6 +26,8 @@ export function normalizeFieldItem(raw: unknown): Field | null {
     Thumbnail: toStringValue(value.Thumbnail),
     ThumbnailAlt: toStringValue(value.ThumbnailAlt),
     File: toStringValue(value.File),
+    FilePlayCanvas: toStringValue(value.FilePlayCanvas),
+    FileFormat: toStringValue(value.FileFormat),
     markers,
     Markers: markers,
     start_pos: value.start_pos ?? value.StartPos ?? value.startPos,

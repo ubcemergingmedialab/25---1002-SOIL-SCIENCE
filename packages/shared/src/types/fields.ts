@@ -18,6 +18,8 @@ export type ViewerMarkerPayload = {
   label?: MarkerLabel;
 };
 
+export type FieldFileFormat = "ksplat" | "sog" | "streamed-lod";
+
 export type Field = {
   FieldID: string;
   Name: string;
@@ -29,6 +31,10 @@ export type Field = {
   Thumbnail?: string;
   ThumbnailAlt?: string;
   File?: string;
+  /** PlayCanvas engine splat URL (SOG or streamed LOD manifest). */
+  FilePlayCanvas?: string;
+  /** Runtime format for FilePlayCanvas. */
+  FileFormat?: FieldFileFormat | string;
   markers?: ViewerMarkerPayload[];
   Markers?: ViewerMarkerPayload[];
   start_pos?: unknown;
@@ -41,6 +47,8 @@ export type AdminField = Omit<Field, "markers" | "Markers"> & {
 export type Pin = {
   title: string;
   path?: string;
+  FilePlayCanvas?: string;
+  FileFormat?: FieldFileFormat | string;
   start_pos?: unknown;
   markers?: unknown[];
 };

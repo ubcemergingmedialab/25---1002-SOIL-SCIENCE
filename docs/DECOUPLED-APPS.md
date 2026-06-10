@@ -49,7 +49,7 @@ Routes:
 - `/admin` redirects to `/`
 - `/editor`
 
-The admin app contains the Admin Panel, Editor, Amplify/Cognito setup, and authenticated admin API client.
+The admin app contains the Admin Panel, Editor, Cognito OAuth (via the `aws-amplify` client library), and authenticated admin API client.
 
 API client:
 
@@ -109,66 +109,63 @@ Build output:
 - `apps/viewer/dist`
 - `apps/admin/dist`
 
-## Amplify Deployment
+## Deployment (S3 + CloudFront)
 
-Deploy the two apps as separate Amplify apps.
+Both apps deploy as **static sites**: Vite build → **S3** origin bucket → **CloudFront** distribution. This replaced the previous **Amplify Hosting** flow. Cognito auth in the admin app still uses the **`aws-amplify` npm package** (client SDK only — not Amplify Hosting). See [`AMPLIFY-AUTH.md`](./AMPLIFY-AUTH.md) for how that dependency is used.
 
-### Viewer Amplify App
+**Full runbook:** [`DEPLOY-S3-CLOUDFRONT.md`](./DEPLOY-S3-CLOUDFRONT.md) (Terraform outputs, Cognito URLs, CI/CD, smoke tests).
 
-App root:
+| App | Build output | S3 sync target | CloudFront role |
+|-----|--------------|----------------|-----------------|
+| Viewer | `apps/viewer/dist` | HCP `viewer_site_bucket_name` | Public viewer at `viewer_site_url` |
+| Admin | `apps/admin/dist` | HCP `admin_site_bucket_name` | Admin + editor at `admin_site_url` |
 
-```text
-apps/viewer
-```
+### Viewer deploy
 
-Build command:
+Build from repo root (or `apps/viewer`):
 
 ```bash
-npm run build
+npm run build:viewer
 ```
 
-Output directory:
+Sync and invalidate (values from HCP Terraform outputs):
 
-```text
-dist
+```bash
+aws s3 sync apps/viewer/dist/ s3://VIEWER_SITE_BUCKET/ --delete
+aws cloudfront create-invalidation --distribution-id VIEWER_DISTRIBUTION_ID --paths "/*"
 ```
 
-Required environment variables:
+Required build-time env:
 
 ```text
 VITE_PUBLIC_API_URL
 ```
 
-Do not configure Cognito for the viewer app.
+Do not configure Cognito for the viewer build.
 
-### Admin Amplify App
+### Admin deploy
 
-App root:
-
-```text
-apps/admin
-```
-
-Build command:
+Build from repo root (or `apps/admin`):
 
 ```bash
-npm run build
+npm run build:admin
 ```
 
-Output directory:
+Sync and invalidate:
 
-```text
-dist
+```bash
+aws s3 sync apps/admin/dist/ s3://ADMIN_SITE_BUCKET/ --delete
+aws cloudfront create-invalidation --distribution-id ADMIN_DISTRIBUTION_ID --paths "/*"
 ```
 
-Required environment variables:
+Required build-time env:
 
 ```text
 VITE_ADMIN_API_URL
-VITE_AWS_REGION
 VITE_COGNITO_USER_POOL_ID
 VITE_COGNITO_CLIENT_ID
 VITE_COGNITO_DOMAIN
+VITE_COGNITO_OAUTH_DOMAIN
 ```
 
 Optional redirect overrides:
@@ -176,16 +173,21 @@ Optional redirect overrides:
 ```text
 VITE_COGNITO_REDIRECT_SIGN_IN
 VITE_COGNITO_REDIRECT_SIGN_OUT
+VITE_APP_ORIGIN
 ```
 
-The admin app defaults these to the current app origin:
+The admin app defaults OAuth redirects to the current page origin with a trailing slash:
 
 ```text
 sign in:  {origin}/
 sign out: {origin}/
 ```
 
-Only set the redirect env vars if you need to override or add explicit redirect URLs. Values must be full `http://` or `https://` URLs; comma-separated lists are supported.
+These must match entries in Terraform `cognito_callback_urls` and `cognito_logout_urls` (admin CloudFront URL + `http://localhost:5174/` for local dev). Only set the redirect env vars when you need extra URLs beyond the default.
+
+### CI/CD
+
+Use a **narrow GitHub deploy IAM role** (not `HCPTerraform`): `aws s3 sync` + CloudFront invalidation for each bucket. Two jobs or a matrix — one per app. Changes under `packages/shared` should trigger both builds. See [`DEPLOY-S3-CLOUDFRONT.md`](./DEPLOY-S3-CLOUDFRONT.md) for workflow shape and IAM policy pointer.
 
 ## AWS Notes
 

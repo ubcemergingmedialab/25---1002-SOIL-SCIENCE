@@ -61,6 +61,9 @@ export async function getPins(): Promise<Pin[]> {
     return {
       title: typeof pin.title === "string" ? pin.title : "",
       path: typeof pin.path === "string" ? pin.path : "",
+      FilePlayCanvas:
+        typeof pin.FilePlayCanvas === "string" ? pin.FilePlayCanvas : undefined,
+      FileFormat: typeof pin.FileFormat === "string" ? pin.FileFormat : undefined,
       start_pos: pin.start_pos,
       markers: Array.isArray(pin.markers) ? pin.markers : [],
     };

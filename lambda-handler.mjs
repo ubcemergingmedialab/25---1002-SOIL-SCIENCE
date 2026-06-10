@@ -126,6 +126,16 @@ const parseStartPos = (raw) => {
   return undefined;
 };
 
+/** PlayCanvas splat URL + format from DynamoDB (Phase 1 migration). */
+function playCanvasAssetFields(item) {
+  const fields = {};
+  const url = toStringValue(item.FilePlayCanvas);
+  const format = toStringValue(item.FileFormat);
+  if (url) fields.FilePlayCanvas = url;
+  if (format) fields.FileFormat = format;
+  return fields;
+}
+
 // --- three simple handlers ---
 
 async function getPins() {
@@ -142,6 +152,7 @@ async function getPins() {
         lng: Number(i.Longitude)
       },
       path: i.File,
+      ...playCanvasAssetFields(i),
       description: i.Description,
       thumbnail: i.Thumbnail,
       thumbnailAlt: i.ThumbnailAlt,
@@ -152,7 +163,7 @@ async function getPins() {
  
 async function getFields() {
   const data = await ddb.send(new ScanCommand({ TableName: TABLE }));
-  return data.Items || [];
+  return { items: data.Items || [] };
 }
 
 async function getFieldById(id) {
