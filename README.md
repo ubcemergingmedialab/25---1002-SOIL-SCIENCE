@@ -49,19 +49,36 @@ We are moving the splat renderer from **`@mkkellogg/gaussian-splats-3d` + Three.
 - **DynamoDB** — `FilePlayCanvas` and `FileFormat` added on field records (e.g. `streamed-lod` manifest URL)
 - **API (code)** — Lambda `/pins` exposes `FilePlayCanvas` / `FileFormat`; `/fields` and `/fields/{id}` pass them through from DynamoDB ([`lambda-handler.mjs`](lambda-handler.mjs) + lab repo `lambda/handler.mjs`)
 - **App types** — `Field`, `Pin`, and `publicApi.ts` updated to carry PlayCanvas fields (viewer still loads `path` / `.ksplat` until Phase 5)
+- **Smoke harness** — dev route `/viewer-pc/` loads `FilePlayCanvas` streamed LOD via `@playcanvas/engine` ([`apps/viewer/src/PlayCanvasSmoke.tsx`](apps/viewer/src/PlayCanvasSmoke.tsx))
+
+### PlayCanvas smoke harness (local)
+
+1. Ensure repo root `.env` has `VITE_PUBLIC_API_URL` (same as legacy viewer).
+2. `npm install` then `npm run dev:viewer` → open **http://localhost:5173/viewer-pc/**
+3. Pick a field from the dropdown (reads `FilePlayCanvas` from `/fields`), or pass a manifest directly:
+   - `http://localhost:5173/viewer-pc/?m={FieldID}`
+   - `http://localhost:5173/viewer-pc/?url=https://{assets_cdn}/splats/lod/{basename}/lod-meta.json`
+   - **Local LOD bundle** (dev server only): `http://localhost:5173/viewer-pc/?url=/work-out/{basename}/lod-meta.json`
+     Example: `http://localhost:5173/viewer-pc/?url=/work-out/UBC_Farm_Agricultural/lod-meta.json`
+     Requires `work/out/{basename}/lod-meta.json` from the conversion script; served by Vite at `/work-out/` (no upload, no CORS).
+4. Compare side-by-side with legacy: `http://localhost:5173/viewer/?m={FieldID}` (`.ksplat` via `File`).
+5. If the scene is upside-down vs legacy, tune `?orientation=180` (Euler X degrees).
+
+**Batch conversion** runs PlayCanvas-safe cleanup automatically (invalid scales + distant position outliers). See [`scripts/splat/README.md`](scripts/splat/README.md).
+
+**What to verify per field:** manifest and chunks load (no CORS/network errors), splat appears, orbit/pan works, orientation matches legacy, acceptable quality on mobile.
 
 ### Still needed (Phase 1 close-out)
 
 - [ ] **Deploy Lambda** — HCP Terraform apply so live `/pins` returns the new fields
 - [ ] **Backfill** — confirm every production field has `FilePlayCanvas` + `FileFormat` in DynamoDB
 - [ ] **CDN checks** — `Cache-Control` on LOD chunk objects; CORS from viewer/admin origins ([`docs/SPLAT-CACHING.md`](docs/SPLAT-CACHING.md))
-- [ ] **Engine smoke test** — load each `FilePlayCanvas` URL with `@playcanvas/engine` (dev harness); verify orientation vs current viewer
+- [ ] **Smoke all fields** — run harness for each `FieldID`; record orientation fixes and any broken manifests
 - [ ] **Regression** — current `/viewer` and admin editor still work on `.ksplat` / `File`
 
 ### Next up (Phase 2+)
 
-- [ ] **`packages/playcanvas-viewer`** — `PlayCanvasApp` wrapper (`loadScene`, camera, dispose)
-- [ ] **Parallel route** — e.g. `/viewer-pc/?m={FieldID}` using `FilePlayCanvas` (default viewer unchanged until Phase 5)
+- [ ] **`packages/playcanvas-viewer`** — extract harness into `PlayCanvasApp` wrapper (`loadScene`, camera, dispose)
 - [ ] **Markers** — map DynamoDB markers → engine hotspots / annotations (Phase 3)
 - [ ] **Viewer cutover** — replace default viewer + inline map viewer (Phase 5)
 - [ ] **Editor on PlayCanvas** — admin marker placement (Phase 6)

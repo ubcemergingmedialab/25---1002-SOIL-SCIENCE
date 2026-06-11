@@ -137,3 +137,7 @@ terraform/lambda/
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# splat processing directories
+temp/
+work/
