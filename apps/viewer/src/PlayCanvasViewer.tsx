@@ -531,7 +531,7 @@ export default function PlayCanvasViewer() {
             type="button"
             className={`playCanvasControlModeBtn${controlMode === "fly" ? " isActive" : ""}`}
             aria-pressed={controlMode === "fly"}
-            title="WASD move, drag to look (scroll-wheel FOV zoom with ?flyZoom=1)"
+            title="WASD move, drag to look, scroll wheel to zoom (FOV)"
             onClick={() => handleControlModeChange("fly")}
           >
             Fly

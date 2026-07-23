@@ -7,7 +7,7 @@ const BASE = import.meta.env.VITE_PUBLIC_API_URL as string | undefined;
 function requireBaseUrl(): string {
   if (!BASE) {
     throw new Error(
-      "VITE_PUBLIC_API_URL is not configured. Copy .env.example to .env and set your coFood API Gateway URL.",
+      "VITE_PUBLIC_API_URL is not configured. Copy .env.example to .env and set your Virtual Soils API Gateway URL.",
     );
   }
   return BASE;

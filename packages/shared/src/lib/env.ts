@@ -12,7 +12,7 @@ export function appOrigin(): string {
 function requireEnv(value: string | undefined, name: string): string {
   if (!value) {
     throw new Error(
-      `${name} is not set. Copy .env.example to .env (or set build-time CI secrets) with your coFood Cognito / hosting values.`,
+      `${name} is not set. Copy .env.example to .env (or set build-time CI secrets) with your Virtual Soils Cognito / hosting values.`,
     );
   }
   return value;

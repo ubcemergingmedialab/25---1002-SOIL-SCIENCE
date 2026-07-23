@@ -1029,7 +1029,7 @@ export default function PlayCanvasEditor() {
               aria-label="Camera control mode"
             >
               {([
-                ["fly", "Fly", "WASD move, drag to look (scroll-wheel FOV zoom with ?flyZoom=1)"],
+                ["fly", "Fly", "WASD move, drag to look, scroll wheel to zoom (FOV)"],
                 ["orbit", "Orbit", "Drag to orbit, right-drag to pan, wheel to dolly zoom"],
               ] as const).map(([nextMode, label, title]) => (
                 <button

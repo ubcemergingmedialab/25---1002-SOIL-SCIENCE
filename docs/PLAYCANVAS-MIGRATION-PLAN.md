@@ -1,6 +1,6 @@
 # PlayCanvas migration — phased plan
 
-Phased transition from **`@mkkellogg/gaussian-splats-3d` + Three.js** to **PlayCanvas** for coFood splat rendering, with mobile performance and annotation UX as primary drivers.
+Phased transition from **`@mkkellogg/gaussian-splats-3d` + Three.js** to **PlayCanvas** for Virtual Soils splat rendering, with mobile performance and annotation UX as primary drivers.
 
 **Prerequisites reading**
 
@@ -117,7 +117,7 @@ Choose one path for Phases 2–6:
 | **A — Engine-first** (recommended if Editor stays in-house) | Need admin Editor, custom icons, Leaflet inline viewer, full UI control |
 | **B — Embed-first, engine later** | Fastest public viewer win; defer Editor; accept temporary dual stack |
 
-Document choice in a short ADR or ticket. Default recommendation for coFood: **Path A (Engine-first)** after a **2-day SuperSplat embed spike** in Phase 2 to validate assets only.
+Document choice in a short ADR or ticket. Default recommendation for Virtual Soils: **Path A (Engine-first)** after a **2-day SuperSplat embed spike** in Phase 2 to validate assets only.
 
 ### Deliverables
 
@@ -234,7 +234,7 @@ Define how **new** sites get PlayCanvas assets:
 
 ### 3.1 Mapping schema
 
-coFood marker (DynamoDB) → PlayCanvas Experience Settings `annotations[]`:
+Virtual Soils marker (DynamoDB) → PlayCanvas Experience Settings `annotations[]`:
 
 | DynamoDB / Editor | PlayCanvas annotation |
 |-------------------|----------------------|

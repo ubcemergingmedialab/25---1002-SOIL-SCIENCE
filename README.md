@@ -1,6 +1,6 @@
-# coFood Digital Twin
+# Virtual Soils
 
-Web application for exploring 3D Gaussian splat reconstructions of garden and landscape sites. Users open an embedded 3D viewer (and optionally browse locations on a map), and authorized stewards manage sites and in-scene markers via an admin panel and editor.
+Web application for exploring 3D Gaussian splat reconstructions of soil and landscape sites. Users browse locations on an interactive map (Leaflet), open an embedded 3D viewer, and (for authorized users) manage sites and in-scene markers via an admin panel and editor.
 
 ---
 
@@ -219,9 +219,7 @@ See [`docs/DEPLOY-S3-CLOUDFRONT.md`](docs/DEPLOY-S3-CLOUDFRONT.md).
 | [`scripts/splat/README.md`](scripts/splat/README.md) | Convert `.ksplat` → SOG / streamed LOD |
 | [`docs/PROJECT.md`](docs/PROJECT.md) | Feature-level app behavior (some sections predate decoupling) |
 | [`docs/SPLAT-CACHING.md`](docs/SPLAT-CACHING.md) | S3 `Cache-Control` for splat objects |
-| [`cofood-digital-twin-implementation-plan.md`](cofood-digital-twin-implementation-plan.md) | Product phases 1–4, effort, milestones |
-| [`docs/cofood-scope.md`](docs/cofood-scope.md) | Near-term EML student window (maps into Phase 1 / early Phase 2) |
-| [`cofood-digital-twin-technical-scope.md`](cofood-digital-twin-technical-scope.md) | Architecture, data model, infra |
+| [`docs/virtual-soils-scope.md`](docs/virtual-soils-scope.md) | Product scope and roadmap |
 | [`docs/eml-context.md`](docs/eml-context.md) | EML project context |
 
 ---

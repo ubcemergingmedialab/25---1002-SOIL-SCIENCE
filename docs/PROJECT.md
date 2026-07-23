@@ -1,10 +1,10 @@
-# coFood – Project Documentation
+# Virtual Soils – Project Documentation
 
 ## Overview
 
-**coFood** is a web application for exploring 3D Gaussian splat (radiance field) reconstructions of garden and landscape sites. Users browse locations on an **interactive map** (Leaflet + OpenStreetMap), then open an embedded **3D viewer** for a chosen site. The project includes an **About** section with project copy, an **admin** area for managing locations, and an **editor** for placing and editing in-scene markers.
+**Virtual Soils** is a web application for exploring 3D Gaussian splat (radiance field) reconstructions of soil and landscape sites. Users browse locations on an **interactive map** (Leaflet + OpenStreetMap), then open an embedded **3D viewer** for a chosen site. The project includes an **About** section with project copy, an **admin** area for managing locations, and an **editor** for placing and editing in-scene markers.
 
-The viewer instruction shell title in the UI is **coFood Viewer**.
+The viewer instruction shell title in the UI is **Virtual Soil Viewer**.
 
 ---
 
@@ -64,7 +64,7 @@ For implementation notes on the map migration, see `docs/MIGRATION-GOOGLE-MAPS-T
 ### Frontend (React)
 
 - **`src/main.tsx`** – Router setup; global `import "leaflet/dist/leaflet.css"`; mounts `App`, `Viewer`, `Editor`, `Admin`; loads `./auth`.
-- **`src/App.tsx`** – Shell: **icon rail** (collapse sidebar, Info, Map), title **coFood**, tab content for Map vs About (`UBCMap` vs long-form article with anchors).
+- **`src/App.tsx`** – Shell: **icon rail** (collapse sidebar, Info, Map), title **Virtual Soils**, tab content for Map vs About (`UBCMap` vs long-form article with anchors).
 - **`src/UBCMap.tsx`** – Leaflet map (OSM tiles), searchable sidebar list, markers with DOM-built popups; **→ Enter** calls `openViewer(path, markers)`; embedded `Viewer` when `activeViewer` is set.
 - **`src/Viewer.tsx`** – Creates `ThreeApp`, resolves `gaussianPath` (props or query), parses `markers`, calls `loadGaussianScene` and `setWorldMarkers`; optional “Back to Map” when used from home.
 - **`src/Editor.tsx`** – Creates `ThreeApp`, scene dropdown from pins, mode (preview / place / edit), marker list and form; syncs marker state to `ThreeApp` and handles placement/selection via `MarkerPickingController`.

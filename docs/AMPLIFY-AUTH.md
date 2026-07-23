@@ -1,6 +1,6 @@
 # aws-amplify auth dependency (admin app)
 
-This document describes how the **`aws-amplify` npm package** is used in the coFood monorepo today.
+This document describes how the **`aws-amplify` npm package** is used in the Virtual Soils monorepo today.
 
 It is **not** about Amplify Hosting. Static sites deploy via **S3 + CloudFront** (see [`DEPLOY-S3-CLOUDFRONT.md`](./DEPLOY-S3-CLOUDFRONT.md)). The `aws-amplify` library is used only as a **browser client SDK for Cognito Hosted UI OAuth** in the admin app.
 

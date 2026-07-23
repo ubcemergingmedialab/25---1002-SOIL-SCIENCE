@@ -1,54 +1,25 @@
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import {
+  DynamoDBClient
+} from "@aws-sdk/client-dynamodb";
 import {
   DynamoDBDocumentClient,
   ScanCommand,
-  GetCommand,
-  PutCommand,
-  DeleteCommand,
+  GetCommand
 } from "@aws-sdk/lib-dynamodb";
 
-const region = process.env.AWS_REGION || "ca-central-1";
-const TABLE = process.env.GARDEN_TABLE_NAME || "cofood-garden-capture-prod-garden";
+const ddb = DynamoDBDocumentClient.from(
+  new DynamoDBClient({region: "ca-central-1"})
+);
+const TABLE = process.env.FIELDS_TABLE_NAME || "eml_fields";
 
-const ENTITY_CAPTURE = "capture";
-const ENTITY_HOTSPOT = "hotspot";
-
-/** Empty / "*" = all captures; otherwise comma-separated Id allowlist for public GET /captures. */
-function parseIdFilter(raw) {
+function parsePinsFilterIds(raw) {
   if (raw === undefined || raw === null) return [];
   const trimmed = String(raw).trim();
   if (trimmed === "" || trimmed === "*") return [];
   return trimmed.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
-const publicCaptureIds = parseIdFilter(process.env.PUBLIC_CAPTURE_IDS);
-
-const corsAllowOrigins = (process.env.CORS_ALLOW_ORIGINS || "")
-  .split(",")
-  .map((value) => value.trim())
-  .filter(Boolean);
-
-function requestOrigin(event) {
-  const headers = event?.headers ?? {};
-  return headers.origin ?? headers.Origin;
-}
-
-/** Echo the browser Origin when allowed — required for admin + viewer on different CloudFront domains. */
-function corsHeaders(event) {
-  const origin = requestOrigin(event);
-  const headers = {
-    "Content-Type": "application/json",
-  };
-
-  if (origin && corsAllowOrigins.includes(origin)) {
-    headers["Access-Control-Allow-Origin"] = origin;
-    headers.Vary = "Origin";
-  }
-
-  return headers;
-}
-
-const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({ region }));
+const pinsFilterIds = parsePinsFilterIds(process.env.PINS_FIELD_IDS);
 
 const unwrapAttributeValue = (attr) => {
   if (attr === null || attr === undefined) return undefined;
@@ -65,8 +36,8 @@ const unwrapAttributeValue = (attr) => {
     return Object.fromEntries(
       Object.entries(attr.M).map(([key, value]) => [
         key,
-        unwrapAttributeValue(value),
-      ]),
+        unwrapAttributeValue(value)
+      ])
     );
   }
   return attr;
@@ -84,14 +55,65 @@ const toNumber = (value) => {
 const toStringValue = (value) =>
   typeof value === "string" ? value : undefined;
 
-function parsePosition(raw) {
+const parseVector = (raw) => {
+  if (!Array.isArray(raw) || raw.length < 3) return null;
+  const coords = raw.slice(0, 3).map((value) => toNumber(value));
+  if (coords.some((val) => typeof val !== "number")) return null;
+  return {
+    x: coords[0],
+    y: coords[1],
+    z: coords[2]
+  };
+};
+
+const parseMarkers = (raw) => {
   const normalized = unwrapAttributeValue(raw);
+  if (!Array.isArray(normalized)) return [];
+
+  return normalized
+    .map((entry) => {
+      if (!Array.isArray(entry) || entry.length < 4) return null;
+      const [iconRaw, scaleRaw, positionRaw] = entry;
+      const position = parseVector(positionRaw);
+      if (!position) return null;
+      const isCurrentShape = entry.length >= 5;
+      const savedViewPosition = isCurrentShape ? parseVector(entry[3]) : null;
+      const viewPosition = savedViewPosition ?? {
+        x: position.x,
+        y: position.y + 2.5,
+        z: position.z + 5
+      };
+      const labelRaw = isCurrentShape ? entry[4] : entry[3];
+      const label = Array.isArray(labelRaw)
+        ? [
+            toStringValue(labelRaw[0]) ?? "",
+            toStringValue(labelRaw[1]) ?? ""
+          ]
+        : [toStringValue(labelRaw) ?? "", ""];
+
+      const scale = toNumber(scaleRaw);
+      return {
+        icon: toStringValue(iconRaw) ?? "",
+        scale: scale ?? undefined,
+        position,
+        viewPosition,
+        label,
+        text: label[0]
+      };
+    })
+    .filter(Boolean);
+};
+
+const parseStartPos = (raw) => {
+  const normalized = unwrapAttributeValue(raw);
+
   if (Array.isArray(normalized) && normalized.length >= 3) {
     const [x, y, z] = normalized.slice(0, 3).map((value) => toNumber(value));
     if ([x, y, z].every((value) => typeof value === "number")) {
       return { x, y, z };
     }
   }
+
   if (normalized && typeof normalized === "object") {
     const x = toNumber(normalized.x);
     const y = toNumber(normalized.y);
@@ -100,232 +122,87 @@ function parsePosition(raw) {
       return { x, y, z };
     }
   }
+
   return undefined;
+};
+
+/** PlayCanvas splat URL + format from DynamoDB (Phase 1 migration). */
+function playCanvasAssetFields(item) {
+  const fields = {};
+  const url = toStringValue(item.FilePlayCanvas);
+  const format = toStringValue(item.FileFormat);
+  if (url) fields.FilePlayCanvas = url;
+  if (format) fields.FileFormat = format;
+  return fields;
 }
 
-function isPublicVisibility(item) {
-  const visibility = toStringValue(item.visibility) ?? "public";
-  return visibility === "public";
-}
+// --- three simple handlers ---
 
-function toPublicCapture(item) {
-  return {
-    id: item.Id,
-    siteId: toStringValue(item.siteId),
-    label: toStringValue(item.label) ?? "",
-    capturedAt: toStringValue(item.capturedAt),
-    splatUrl: toStringValue(item.splatUrl),
-    thumbnailUrl: toStringValue(item.thumbnailUrl),
-    notes: toStringValue(item.notes),
-    visibility: toStringValue(item.visibility) ?? "public",
-  };
-}
-
-function toPublicHotspot(item) {
-  return {
-    id: item.Id,
-    captureId: toStringValue(item.captureId),
-    position: parsePosition(item.position),
-    icon: toStringValue(item.icon),
-    scale: toNumber(item.scale) ?? undefined,
-    title: toStringValue(item.title) ?? "",
-    summary: toStringValue(item.summary) ?? "",
-    contentType: toStringValue(item.contentType),
-    tags: Array.isArray(item.tags) ? item.tags : [],
-    visibility: toStringValue(item.visibility) ?? "public",
-    media: Array.isArray(item.media) ? item.media : [],
-  };
-}
-
-async function scanByEntityType(entityType) {
+async function getPins() {
   const data = await ddb.send(new ScanCommand({ TableName: TABLE }));
-  return (data.Items || []).filter((item) => item.EntityType === entityType);
+  const filterSet = new Set(pinsFilterIds);
+  return (data.Items || [])
+    .filter((i) =>
+      filterSet.size === 0 ? true : filterSet.has(String(i.FieldID)),
+    )
+    .map(i => ({
+      title: i.Name,
+      position: {
+        lat: Number(i.Latitude),
+        lng: Number(i.Longitude)
+      },
+      path: i.File,
+      ...playCanvasAssetFields(i),
+      description: i.Description,
+      thumbnail: i.Thumbnail,
+      thumbnailAlt: i.ThumbnailAlt,
+      start_pos: parseStartPos(i.start_pos),
+      start_view_position: parseStartPos(i.start_view_position),
+      markers: parseMarkers(i.markers)
+    }));
+  }
+ 
+async function getFields() {
+  const data = await ddb.send(new ScanCommand({ TableName: TABLE }));
+  return { items: data.Items || [] };
 }
 
-async function getById(id) {
-  const res = await ddb.send(
-    new GetCommand({ TableName: TABLE, Key: { Id: id } }),
-  );
+async function getFieldById(id) {
+  const res = await ddb.send(new GetCommand({
+    TableName: TABLE,
+    Key: { FieldID: id }
+  }));
   return res.Item || null;
 }
 
-async function listPublicCaptures() {
-  const items = await scanByEntityType(ENTITY_CAPTURE);
-  const filterSet = new Set(publicCaptureIds);
-  return items
-    .filter((item) => isPublicVisibility(item))
-    .filter((item) =>
-      filterSet.size === 0 ? true : filterSet.has(String(item.Id)),
-    )
-    .map(toPublicCapture);
-}
-
-async function getPublicCapture(id) {
-  const item = await getById(id);
-  if (!item || item.EntityType !== ENTITY_CAPTURE) return null;
-  if (!isPublicVisibility(item)) return null;
-  return toPublicCapture(item);
-}
-
-async function listPublicHotspots(captureId) {
-  const items = await scanByEntityType(ENTITY_HOTSPOT);
-  return items
-    .filter((item) => isPublicVisibility(item))
-    .filter((item) =>
-      captureId ? toStringValue(item.captureId) === captureId : true,
-    )
-    .map(toPublicHotspot);
-}
-
-async function listAdminCaptures() {
-  return { items: await scanByEntityType(ENTITY_CAPTURE) };
-}
-
-async function listAdminHotspots(captureId) {
-  const items = await scanByEntityType(ENTITY_HOTSPOT);
-  return {
-    items: captureId
-      ? items.filter((item) => toStringValue(item.captureId) === captureId)
-      : items,
-  };
-}
-
-async function putEntity(entityType, body) {
-  const id = body?.Id ?? body?.id;
-  if (!id) throw new Error("Id required");
-  const item = {
-    ...body,
-    Id: id,
-    EntityType: entityType,
-  };
-  delete item.id;
-  await ddb.send(new PutCommand({ TableName: TABLE, Item: item }));
-  return { item };
-}
-
-async function updateEntity(entityType, body) {
-  const id = body?.Id ?? body?.id;
-  if (!id) throw new Error("Id required");
-  const existing = await getById(id);
-  if (!existing || existing.EntityType !== entityType) return null;
-  const merged = {
-    ...existing,
-    ...body,
-    Id: id,
-    EntityType: entityType,
-  };
-  delete merged.id;
-  await ddb.send(new PutCommand({ TableName: TABLE, Item: merged }));
-  return { item: merged };
-}
-
-async function deleteEntity(entityType, id) {
-  if (!id) throw new Error("Id required");
-  const existing = await getById(id);
-  if (existing && existing.EntityType !== entityType) {
-    throw new Error(`Id is not a ${entityType}`);
-  }
-  await ddb.send(
-    new DeleteCommand({ TableName: TABLE, Key: { Id: id } }),
-  );
-}
-
-function parseJsonBody(event) {
-  if (!event.body) return {};
-  const raw = event.isBase64Encoded
-    ? Buffer.from(event.body, "base64").toString("utf8")
-    : event.body;
-  return JSON.parse(raw);
-}
-
-function queryParam(event, name) {
-  const params = event.queryStringParameters || {};
-  return params[name] || undefined;
-}
+// --- main Lambda entry point ---
 
 export const handler = async (event) => {
   const path = event.rawPath || event.path;
   const method = event.requestContext?.http?.method || event.httpMethod;
 
   try {
-    if (method === "GET" && path === "/captures") {
-      return json(200, { items: await listPublicCaptures() }, event);
+    if (method === "GET" && path === "/pins")
+      return json(200, await getPins());
+
+    if (method === "GET" && path === "/fields")
+      return json(200, await getFields());
+
+    const match = path.match(/^\/fields\/([^/]+)$/);
+    if (method === "GET" && match) {
+      const item = await getFieldById(match[1]);
+      return item ? json(200, item) : json(404, { error: "Not found" });
     }
 
-    const captureMatch = path.match(/^\/captures\/([^/]+)$/);
-    if (method === "GET" && captureMatch) {
-      const item = await getPublicCapture(decodeURIComponent(captureMatch[1]));
-      return item
-        ? json(200, item, event)
-        : json(404, { error: "Not found" }, event);
-    }
-
-    if (method === "GET" && path === "/hotspots") {
-      const captureId = queryParam(event, "captureId");
-      return json(200, { items: await listPublicHotspots(captureId) }, event);
-    }
-
-    if (path === "/admin/api/captures") {
-      if (method === "GET") {
-        return json(200, await listAdminCaptures(), event);
-      }
-      if (method === "POST") {
-        const body = parseJsonBody(event);
-        return json(201, await putEntity(ENTITY_CAPTURE, body), event);
-      }
-      if (method === "PUT") {
-        const body = parseJsonBody(event);
-        const result = await updateEntity(ENTITY_CAPTURE, body);
-        return result
-          ? json(200, result, event)
-          : json(404, { error: "Not found" }, event);
-      }
-      if (method === "DELETE") {
-        const body = parseJsonBody(event);
-        await deleteEntity(ENTITY_CAPTURE, body?.Id ?? body?.id);
-        return json(204, null, event);
-      }
-    }
-
-    if (path === "/admin/api/hotspots") {
-      if (method === "GET") {
-        const captureId = queryParam(event, "captureId");
-        return json(200, await listAdminHotspots(captureId), event);
-      }
-      if (method === "POST") {
-        const body = parseJsonBody(event);
-        if (!(body?.captureId || body?.CaptureId)) {
-          return json(400, { error: "captureId required" }, event);
-        }
-        const normalized = {
-          ...body,
-          captureId: body.captureId ?? body.CaptureId,
-        };
-        return json(201, await putEntity(ENTITY_HOTSPOT, normalized), event);
-      }
-      if (method === "PUT") {
-        const body = parseJsonBody(event);
-        const result = await updateEntity(ENTITY_HOTSPOT, body);
-        return result
-          ? json(200, result, event)
-          : json(404, { error: "Not found" }, event);
-      }
-      if (method === "DELETE") {
-        const body = parseJsonBody(event);
-        await deleteEntity(ENTITY_HOTSPOT, body?.Id ?? body?.id);
-        return json(204, null, event);
-      }
-    }
-
-    return json(404, { error: "Not found" }, event);
+    return json(404, { error: "Not found" });
   } catch (e) {
     console.error(e);
-    return json(500, { error: "Server error" }, event);
+    return json(500, { error: "Server error" });
   }
 };
 
-const json = (status, body, event) => ({
+const json = (status, body) => ({
   statusCode: status,
-  headers: corsHeaders(event),
-  body: body === null || body === undefined ? "" : JSON.stringify(body),
+  headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
+  body: JSON.stringify(body)
 });

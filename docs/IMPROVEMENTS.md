@@ -1,6 +1,6 @@
 # Code Structure Improvements – Prioritised
 
-Suggested improvements to the coFood codebase, ordered by impact and effort. Priorities are **P0 (high)** → **P3 (nice-to-have)**.
+Suggested improvements to the Virtual Soils codebase, ordered by impact and effort. Priorities are **P0 (high)** → **P3 (nice-to-have)**.
 
 ---
 

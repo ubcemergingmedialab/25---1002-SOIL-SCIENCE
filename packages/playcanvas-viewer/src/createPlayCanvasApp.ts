@@ -9,6 +9,7 @@ import {
   isMobileLikeControls,
 } from "./mobileCamera";
 import { DEFAULT_CAMERA_FOV, setupFlyFovZoom } from "./flyFovZoom";
+import { setupFlyMoveEasing } from "./flyMoveEasing";
 import { createCameraInputGate } from "./cameraInputGate";
 import { setupEditorMarkerGizmo, type MarkerEditHandlers } from "./editorMarkerGizmo";
 import { GIZMO_AXIS_LENGTH, START_AXIS_LENGTH } from "./editorAxisVisual";
@@ -117,7 +118,7 @@ export type PlayCanvasAppOptions = {
     /** Voxel-grid Y offset below the heightmap surface (meters). */
     yOffset?: number;
   };
-  /** Enable scroll-wheel FOV zoom while in desktop fly mode. Off by default. */
+  /** Enable scroll-wheel FOV zoom while in desktop fly mode. On by default. */
   flyZoom?: boolean;
   /**
    * Forward-pass alpha cull threshold (0–1). When set, locks the value and ignores
@@ -186,7 +187,7 @@ export async function createPlayCanvasApp(
     heightmapDebug = {},
     coordReadout = false,
     groundOccluder = {},
-    flyZoom = false,
+    flyZoom = true,
     alphaClipForward: alphaClipForwardOverride,
   } = options;
   const heightmapDebugEnabled = heightmapDebug.enabled === true;
@@ -271,7 +272,7 @@ export async function createPlayCanvasApp(
     app.assets.load(asset);
   });
 
-  reportLoad("Processing scene...", 0.72);
+  reportLoad("Processing virtual soil...", 0.72);
 
   app.start();
 
@@ -297,6 +298,14 @@ export async function createPlayCanvasApp(
 
   const flyFovZoom = setupFlyFovZoom(canvas, camera);
 
+  const flyMoveEasing =
+    controls &&
+    setupFlyMoveEasing(app, controls, {
+      moveSpeed: 4,
+      moveFastSpeed: 12,
+      moveSlowSpeed: controls.moveSlowSpeed,
+    });
+
   if (controls) {
     Object.assign(controls, {
       sceneSize: 200,
@@ -316,6 +325,7 @@ export async function createPlayCanvasApp(
       } else {
         flyFovZoom.setEnabled(false);
       }
+      flyMoveEasing?.setControlMode(defaultControlMode);
     }
   } else {
     flyFovZoom.setEnabled(false);
@@ -351,7 +361,7 @@ export async function createPlayCanvasApp(
       off: (name: string, fn: (...args: unknown[]) => void) => void;
     };
 
-    reportLoad("Finalizing scene...", 0.92);
+    reportLoad("Finalizing virtual soil...", 0.92);
 
     let settled = false;
     const finish = () => {
@@ -487,7 +497,7 @@ export async function createPlayCanvasApp(
     sceneCameraPosition,
   });
   heightClampHandle.clampNow();
-  reportLoad("Finalizing scene...", 1);
+  reportLoad("Finalizing virtual soil...", 1);
 
   const cameraInputGate = createCameraInputGate(controls ?? null);
   const editorOverlayLayer = showStartAxes
@@ -570,6 +580,7 @@ export async function createPlayCanvasApp(
     },
     resetCamera() {
       flyFovZoom.reset();
+      flyMoveEasing?.reset();
       applyStartPosCameraFraming();
       heightClampHandle.clampNow();
     },
@@ -580,6 +591,7 @@ export async function createPlayCanvasApp(
       } else {
         flyFovZoom.setControlMode(mode);
       }
+      flyMoveEasing?.setControlMode(mode);
     },
     setPerformancePreset(preset: PerformancePreset) {
       if (budgetLocked && alphaClipLocked) return;
@@ -683,6 +695,7 @@ export async function createPlayCanvasApp(
     },
     destroy() {
       flyFovZoom.destroy();
+      flyMoveEasing?.destroy();
       heightClampHandle.destroy();
       heightmapOverlayHandle?.destroy();
       heightmapOccluderHandle?.destroy();

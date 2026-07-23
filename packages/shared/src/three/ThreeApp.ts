@@ -640,7 +640,7 @@ export class ThreeApp {
     this.overlay.setProgress(state.progress);
 
     if (state.phase === "downloading") {
-      const prefix = reloading ? "Reloading scene..." : "Downloading scene data...";
+      const prefix = reloading ? "Reloading virtual soil..." : "Downloading scene data...";
       this.overlay.setHint(
         state.progress === null
           ? prefix
@@ -650,11 +650,11 @@ export class ThreeApp {
     }
 
     if (state.phase === "processing") {
-      this.overlay.setHint(reloading ? "Processing scene..." : "Processing scene data...");
+      this.overlay.setHint(reloading ? "Processing virtual soil..." : "Processing scene data...");
       return;
     }
 
-    this.overlay.setHint("Finalizing scene...");
+    this.overlay.setHint("Finalizing virtual soil...");
   }
 
   private updateCameraTransition(dt: number) {
@@ -731,7 +731,7 @@ export class ThreeApp {
     // Reload scene if one was loaded
     if (currentPath) {
       this.overlay.show();
-      this.overlay.setHint("Reloading scene...");
+      this.overlay.setHint("Reloading virtual soil...");
       this.overlay.setProgress(0);
       try {
         await this.gaussian.loadScene(currentPath, (state) =>

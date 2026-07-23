@@ -135,7 +135,7 @@ Use when repeat visits matter more than fastest first paint.
 
 When HTTP caching is insufficient, cache the file in the browser explicitly:
 
-1. `fetch(splatUrl)` → store response in `caches.open('cofood-splats')`.
+1. `fetch(splatUrl)` → store response in `caches.open('virtual-soils-splats')`.
 2. On next visit: `cache.match(url)` → `URL.createObjectURL(blob)`.
 3. Pass the **blob URL** to `addSplatScene()` (library supports blob URLs with an explicit `format` if needed).
 

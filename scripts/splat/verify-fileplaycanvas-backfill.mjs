@@ -50,7 +50,7 @@ async function main() {
   const base = process.env.VITE_PUBLIC_API_URL?.replace(/\/$/, "");
   if (!base) {
     console.error(
-      "error: VITE_PUBLIC_API_URL is not set. Copy .env.example to .env and set your coFood API Gateway URL, or pass VITE_PUBLIC_API_URL in the environment.",
+      "error: VITE_PUBLIC_API_URL is not set. Copy .env.example to .env and set your Virtual Soils API Gateway URL, or pass VITE_PUBLIC_API_URL in the environment.",
     );
     process.exit(1);
   }

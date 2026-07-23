@@ -13,7 +13,7 @@ missing=()
 
 if [[ ${#missing[@]} -gt 0 ]]; then
   echo "error: missing required deploy variables: ${missing[*]}" >&2
-  echo "Set them to your coFood viewer site bucket and CloudFront distribution ID before deploying." >&2
+  echo "Set them to your Virtual Soils viewer site bucket and CloudFront distribution ID before deploying." >&2
   echo "Example:" >&2
   echo "  export VIEWER_SITE_BUCKET=your-viewer-site-bucket" >&2
   echo "  export VIEWER_CLOUDFRONT_DISTRIBUTION_ID=E1234567890ABC" >&2

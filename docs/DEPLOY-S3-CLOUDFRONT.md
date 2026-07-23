@@ -1,6 +1,6 @@
 # Deploy: two apps → two S3 buckets + CloudFront
 
-This document describes how to deploy the **decoupled coFood frontend** (`apps/viewer` and `apps/admin`) to **separate S3 origin buckets**, each fronted by its **own CloudFront distribution**.
+This document describes how to deploy the **decoupled Virtual Soils frontend** (`apps/viewer` and `apps/admin`) to **separate S3 origin buckets**, each fronted by its **own CloudFront distribution**.
 
 It replaces the previous single-app flow (one `dist/`, one site bucket, Amplify, or a combined build).
 
@@ -8,7 +8,7 @@ It replaces the previous single-app flow (one `dist/`, one site bucket, Amplify,
 
 - Production viewer URLs per field: [`VIEWER-SPLAT-LINKS.md`](./VIEWER-SPLAT-LINKS.md)
 - App architecture: [`DECOUPLED-APPS.md`](./DECOUPLED-APPS.md)
-- Terraform / HCP: use your coFood (or LSN) infrastructure repo — this app repo does not define AWS resources
+- Terraform / HCP: use your Virtual Soils (or LSN) infrastructure repo — this app repo does not define AWS resources
 
 ---
 
@@ -132,8 +132,8 @@ The assets bucket module uses the same list for splat fetches from the browser.
 
 Use a **narrow deploy role** (not `HCPTerraform`). Extend the lab policy template `docs/iam/github-deploy-policy.json` to cover **both** site bucket name patterns, for example:
 
-- `arn:aws:s3:::your-cofood-viewer-site-*`
-- `arn:aws:s3:::your-cofood-admin-site-*`
+- `arn:aws:s3:::your-virtual-soils-viewer-site-*`
+- `arn:aws:s3:::your-virtual-soils-admin-site-*`
 - `cloudfront:CreateInvalidation` on both distribution ARNs (or scoped `distribution/*` in account)
 
 Wire GitHub Actions OIDC to this role per org/repo conventions.

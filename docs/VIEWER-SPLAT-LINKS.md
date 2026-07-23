@@ -1,6 +1,6 @@
 # Production viewer links (splats)
 
-Template for documenting public PlayCanvas viewer URLs after coFood hosting is provisioned. Use for smoke tests, LMS embeds, and sharing.
+Template for documenting public PlayCanvas viewer URLs after Virtual Soils hosting is provisioned. Use for smoke tests, LMS embeds, and sharing.
 
 **Warning:** This fork does not ship baked-in CloudFront or API hostnames. Set the variables below from your Terraform / hosting outputs before building this list. Running tools against unset URLs will fail.
 
@@ -31,7 +31,7 @@ Export these (or substitute manually) before generating links:
 - `FieldID` comes from DynamoDB / `GET /fields` (not the splat file basename).
 - `/?m={FieldID}` on the viewer root redirects to `/viewer/?m=…`.
 - Disable ground height clamp on noisy scenes: append `&groundClamp=0`.
-- Enable Fly-mode scroll-wheel zoom (FOV): append `&flyZoom=1` (e.g. `…/viewer/?m=AW_3&flyZoom=1`).
+- Fly-mode scroll-wheel zoom (FOV) is **on** by default in desktop Fly mode; disable with `&flyZoom=0` if needed.
 
 ---
 
@@ -48,7 +48,7 @@ All parameters below are read from the viewer URL query string (`?key=value`, ch
 | `startPos` | JSON array `[x,y,z]` (URL-encoded) | Overrides the initial camera/start position. Falls back to the field's `start_pos`, then the built-in default. |
 | `orientation` | Number (degrees) — default `180` | Rotation applied about the X axis to align the splat. Non-numeric values fall back to `180`. |
 | `groundClamp` / `heightClamp` | `0`, `false`, `off`, `no`, `disable`, `disabled` disable it | Ground height clamp is **on** by default; set either param to a falsey token to disable it on noisy heightmaps. |
-| `flyZoom` | `1`, `true`, `yes`, `on`, `enable`, `enabled` enable it | Scroll-wheel FOV zoom in **Fly** mode (changes lens FOV without moving the camera). **Off** by default; enable with a truthy token. Desktop only; Orbit-mode wheel dolly is unaffected. |
+| `flyZoom` | `0`, `false`, `off`, `no`, `disable`, `disabled` disable it | Scroll-wheel FOV zoom in **Fly** mode (changes lens FOV without moving the camera). **On** by default on desktop; Orbit-mode wheel dolly is unaffected. |
 | `skybox` | `default` / `horizon` / `legacy` (default), `blue` / `solid` / `solidblue`, `infinite` / `cubemap` / `wrap` / `old` | Sky background mode. `default` = horizon fade, `blue` = solid blue surround, `infinite` = legacy wraparound cubemap. |
 | `budget` | Number of millions (e.g. `5`, `5m`), or `0` / `off` / `none` / `unlimited` | Overrides the global splat budget (max Gaussians). `0`/`off`/etc. removes the cap (distance-LOD only). When set, the Quality preset no longer changes the budget. |
 | `lod` | Integer ≥ 0 (e.g. `0`) | Locks streamed LOD to a single detail level for debugging. `0` = finest level only. |
@@ -78,7 +78,7 @@ These parameters apply to the **admin editor** (marker manager / start-position 
 | `fieldId` | Field ID string (e.g. `AW1`) | Opens that field in management mode (loads and lets you edit its markers and start position). |
 | `url` / `gaussianPath` / `path` | Splat URL or path | Opens an ad-hoc splat directly (checked in that order). Used when there's no saved field. |
 | `controlMode` | `fly`, `orbit` | Initial camera control scheme. Default is `fly` in the PlayCanvas editor and `orbit` in the legacy editor; other values fall back to that default. |
-| `flyZoom` | `1`, `true`, `yes`, `on`, `enable`, `enabled` enable it | Scroll-wheel FOV zoom in **Fly** mode (changes lens FOV without moving the camera). **Off** by default; enable with a truthy token. Desktop only. |
+| `flyZoom` | `0`, `false`, `off`, `no`, `disable`, `disabled` disable it | Scroll-wheel FOV zoom in **Fly** mode (changes lens FOV without moving the camera). **On** by default on desktop. |
 | `orientation` | Number (degrees) — default `180` | Rotation about the X axis to align the splat. Non-numeric values fall back to `180`. |
 | `title` | Any string | Scene title shown in the editor. Only meaningful with an ad-hoc `url`. |
 | `location` | Any string | Scene location shown in the editor. Only meaningful with an ad-hoc `url`. |
@@ -90,7 +90,7 @@ These parameters apply to the **admin editor** (marker manager / start-position 
 
 ## Fields and viewer links
 
-Populate after your coFood API and viewer are live:
+Populate after your Virtual Soils API and viewer are live:
 
 | Field ID | Name | Splat bundle (LOD) | Viewer |
 |----------|------|--------------------|--------|

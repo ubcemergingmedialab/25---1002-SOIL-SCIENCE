@@ -59,7 +59,7 @@ export class LoadingOverlay {
     });
 
     this.label = document.createElement("div");
-    this.label.textContent = "Loading scene";
+    this.label.textContent = "Loading Virtual Soil";
     Object.assign(this.label.style, {
       marginTop: "6px",
       color: "#f8fafc",

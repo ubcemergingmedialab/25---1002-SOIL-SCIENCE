@@ -1,4 +1,4 @@
-# PlayCanvas Gaussian Splat — evaluation for coFood
+# PlayCanvas Gaussian Splat — evaluation for Virtual Soils
 
 Stakeholder suggestion: switch from the current **`@mkkellogg/gaussian-splats-3d` + Three.js** stack to **PlayCanvas** for better mobile performance, and explore PlayCanvas **annotations**.
 
@@ -17,7 +17,7 @@ This document compares tradeoffs against the **current implementation** in this 
 | Question | Answer |
 |----------|--------|
 | Is PlayCanvas likely faster on mobile? | **Yes, potentially by a large margin** — especially with **WebGPU**, **SOG compression**, and **streamed LOD**. Published benchmarks show ~2× FPS on iPhone-class hardware at multi-million splat counts vs WebGL2. |
-| Is it a drop-in replacement? | **No.** PlayCanvas is a full engine (or a separate embeddable viewer product). coFood has deep custom integration: React shell, marker editor, DynamoDB-backed markers, fly/orbit controls, mobile UI, and `.ksplat` assets on S3. |
+| Is it a drop-in replacement? | **No.** PlayCanvas is a full engine (or a separate embeddable viewer product). Virtual Soils has deep custom integration: React shell, marker editor, DynamoDB-backed markers, fly/orbit controls, mobile UI, and `.ksplat` assets on S3. |
 | Do PlayCanvas annotations replace our markers? | **Partially.** They cover **guided-tour hotspots** (position + title + body + camera pose) similar to viewer markers, but **not** the admin **Editor** workflow (place/edit/save icons to DynamoDB). |
 | Recommended next step if exploring | **Benchmark** one production scene on a target phone (current stack vs PlayCanvas SuperSplat viewer with SOG/streamed LOD export). Then follow [`PLAYCANVAS-MIGRATION-PLAN.md`](./PLAYCANVAS-MIGRATION-PLAN.md). |
 
@@ -56,7 +56,7 @@ Each marker stores: **icon URL**, **radius**, **world position**, **view positio
 
 PlayCanvas is several related products:
 
-| Layer | What it is | Relevance to coFood |
+| Layer | What it is | Relevance to Virtual Soils |
 |-------|------------|----------------------------|
 | **PlayCanvas Engine** (open source) | Full WebGL/WebGPU game engine with GSplat rendering | Replace Three.js entirely; maximum control |
 | **SuperSplat Viewer** (`@playcanvas/supersplat-viewer`) | Embeddable static viewer + Experience Settings JSON | Fast path for **read-only** viewing |
@@ -83,7 +83,7 @@ Our stack is **WebGL2 + CPU sort** only. On thermally constrained phones, CPU so
 
 PlayCanvas **Streamed LOD** splits scenes into chunks with a manifest. The viewer loads coarse detail first, then refines. A **global splat budget** (e.g. ~1M on mobile) caps total Gaussians rendered regardless of scene size.
 
-coFood loads a **single `.ksplat` file** per site (full scene into memory/GPU). We mitigate with alpha culling and lower DPR, not true LOD streaming.
+Virtual Soils loads a **single `.ksplat` file** per site (full scene into memory/GPU). We mitigate with alpha culling and lower DPR, not true LOD streaming.
 
 ### 3. SOG compression
 
@@ -121,7 +121,7 @@ We already cap DPR and offer mobile orbit UI, but the **renderer core** is less 
 - **Walk mode / collision / WebXR** (engine + SuperSplat ecosystem) if product roadmap needs them
 - **Tooling**: SuperSplat Studio, `splat-transform`, HTML export, self-hosted viewer bundle
 
-### Where coFood is stronger today
+### Where Virtual Soils is stronger today
 
 - **Tight integration with our product**: Leaflet map → inline viewer → same marker schema as admin
 - **Custom admin Editor**: interactive marker placement, icon picker, persistence to **DynamoDB** via Lambda
@@ -150,7 +150,7 @@ Option D — Stay on mkkellogg; optimize asset pipeline only
 
 ---
 
-## Annotations vs coFood markers
+## Annotations vs Virtual Soils markers
 
 ### PlayCanvas annotations (SuperSplat / Experience Settings)
 
@@ -171,9 +171,9 @@ Visitor UX: markers on scene, **Previous / Next** tour navigator, click → came
 
 The engine provides an [`annotation.mjs`](https://github.com/playcanvas/engine/pull/8202) script pattern: 3D hotspots, screen-space tooltips, click events, `worldToScreen` projection. Suitable if we rebuild on the engine and want **custom** UI while keeping hotspot behavior.
 
-### coFood markers today
+### Virtual Soils markers today
 
-| Capability | coFood | PlayCanvas annotations |
+| Capability | Virtual Soils | PlayCanvas annotations |
 |------------|---------------|------------------------|
 | 3D position | ✅ | ✅ |
 | Label / description | ✅ (`MarkerLabel`) | ✅ (title + text) |
@@ -192,7 +192,7 @@ Possible convergence: map DynamoDB markers → Experience Settings `annotations[
 
 ## File format impact
 
-| Format | coFood today | PlayCanvas runtime |
+| Format | Virtual Soils today | PlayCanvas runtime |
 |--------|---------------------|-------------------|
 | `.ksplat` | ✅ primary CDN format | Input only via `splat-transform`; **not** native engine asset |
 | `.ply` | supported by library | ✅ source / interchange |
@@ -233,7 +233,7 @@ Implications:
 
 2. **Separate two questions:**
    - *Renderer performance* → PlayCanvas is a credible upgrade path on mobile **if** you adopt SOG/streaming/WebGPU, not just swap npm packages.
-   - *Annotations* → PlayCanvas offers polished **tour-style** annotations; coFood needs **admin-authored, database-backed** markers — overlap in UX, different in workflow. A hybrid (DynamoDB → settings export) is possible but not free.
+   - *Annotations* → PlayCanvas offers polished **tour-style** annotations; Virtual Soils needs **admin-authored, database-backed** markers — overlap in UX, different in workflow. A hybrid (DynamoDB → settings export) is possible but not free.
 
 3. **If mobile is the primary driver**, a phased approach is lowest risk:
    - Phase 1: SuperSplat viewer POC on `/viewer` standalone route
