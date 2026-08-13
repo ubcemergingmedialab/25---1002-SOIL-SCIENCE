@@ -190,17 +190,18 @@ Cognito callback/logout URLs in Terraform must include `http://localhost:5174/` 
 | `npm run typecheck` | TypeScript project references |
 | `npm run lint` | ESLint |
 
-Production deploy (requires env vars):
+Production deploy reads deploy targets from repo-root `.env` (see [`.env.example`](.env.example)):
 
 ```bash
-export VIEWER_SITE_BUCKET=...
-export VIEWER_CLOUDFRONT_DISTRIBUTION_ID=...
-./deploy_viewer.sh
+# In .env:
+# VIEWER_SITE_BUCKET=...
+# VIEWER_CLOUDFRONT_DISTRIBUTION_ID=...
 
-export ADMIN_SITE_BUCKET=...
-export ADMIN_CLOUDFRONT_DISTRIBUTION_ID=...
+./deploy_viewer.sh
 ./deploy_admin.sh
 ```
+
+Shell exports still override `.env` when both are set.
 
 See [`docs/DEPLOY-S3-CLOUDFRONT.md`](docs/DEPLOY-S3-CLOUDFRONT.md).
 

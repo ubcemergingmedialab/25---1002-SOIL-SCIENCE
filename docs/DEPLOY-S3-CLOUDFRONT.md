@@ -192,21 +192,21 @@ Alternatively, set `envDir` in both `vite.config.ts` files to the repo root and 
 
 ## Manual deploy (first time or debugging)
 
-Run from the **repository root** so workspaces resolve `@soil/shared`. Preferred: use the root deploy scripts, which **fail fast** if hosting env vars are missing:
+Run from the **repository root** so workspaces resolve `@soil/shared`. Preferred: use the root deploy scripts. They load deploy targets from repo-root `.env` (see `.env.example`) and **fail fast** if required variables are still missing:
 
 ```bash
-# Build-time (Vite) — required before either script
-export VITE_PUBLIC_API_URL="https://YOUR_API.execute-api.ca-central-1.amazonaws.com"
-# Admin also needs VITE_ADMIN_API_URL + VITE_COGNITO_* (see .env.example)
+# Build-time (Vite) + deploy targets — set in .env at repo root
+# VITE_PUBLIC_API_URL=...
+# VIEWER_SITE_BUCKET=...
+# VIEWER_CLOUDFRONT_DISTRIBUTION_ID=...
+# ADMIN_SITE_BUCKET=...
+# ADMIN_CLOUDFRONT_DISTRIBUTION_ID=...
 
-export VIEWER_SITE_BUCKET="YOUR_VIEWER_SITE_BUCKET"
-export VIEWER_CLOUDFRONT_DISTRIBUTION_ID="VIEWER_DISTRIBUTION_ID"
 ./deploy_viewer.sh
-
-export ADMIN_SITE_BUCKET="YOUR_ADMIN_SITE_BUCKET"
-export ADMIN_CLOUDFRONT_DISTRIBUTION_ID="ADMIN_DISTRIBUTION_ID"
 ./deploy_admin.sh
 ```
+
+Exported shell variables override `.env` when both are set.
 
 ### Viewer (explicit commands)
 

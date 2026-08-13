@@ -10,11 +10,11 @@ Template for documenting public PlayCanvas viewer URLs after Virtual Soils hosti
 
 Export these (or substitute manually) before generating links:
 
-| Role | Env var | Example placeholder |
-|------|---------|---------------------|
-| Viewer | `VIEWER_SITE_URL` | `https://YOUR_VIEWER_CLOUDFRONT_DOMAIN` |
-| Assets (splats / LOD) | `ASSETS_CDN_URL` | `https://YOUR_ASSETS_CLOUDFRONT_DOMAIN` |
-| API | `VITE_PUBLIC_API_URL` | `https://YOUR_API_ID.execute-api.ca-central-1.amazonaws.com` |
+| Role | Env var | Production (Virtual Soils) |
+|------|---------|----------------------------|
+| Viewer | `VIEWER_SITE_URL` | `https://d2npz8tam2i8fl.cloudfront.net` |
+| Assets (splats / LOD) | `ASSETS_CDN_URL` | `https://d3sni13yu1e7cb.cloudfront.net` |
+| API | `VITE_PUBLIC_API_URL` | `https://5yfm4yfcq6.execute-api.ca-central-1.amazonaws.com` |
 
 ```bash
 : "${VIEWER_SITE_URL:?error: set VIEWER_SITE_URL (viewer CloudFront HTTPS origin)}"
@@ -90,11 +90,18 @@ These parameters apply to the **admin editor** (marker manager / start-position 
 
 ## Fields and viewer links
 
-Populate after your Virtual Soils API and viewer are live:
+Production fields from `GET /fields` (refreshed 2026-07-23):
 
 | Field ID | Name | Splat bundle (LOD) | Viewer |
 |----------|------|--------------------|--------|
-| *(from GET /fields)* | | | `{VIEWER_SITE_URL}/viewer/?m={FieldID}` |
+| AW1 | UBC Farm Agricultural Fields | `UBC_Farm_Agricultural` | https://d2npz8tam2i8fl.cloudfront.net/viewer/?m=AW1 |
+| AW2 | UBC Farm Agricultural Fields 2 | `UBC_Farm_Agricultural` | https://d2npz8tam2i8fl.cloudfront.net/viewer/?m=AW2 |
+| AW_3 | UBC Totem Field | `UBC_TotemField` | https://d2npz8tam2i8fl.cloudfront.net/viewer/?m=AW_3 |
+| StsAiles_001 | Sts'Ailes Territory — Philips Arm Forest Garden | `PhilipsForestGarden_HighQuality_3SH` | https://d2npz8tam2i8fl.cloudfront.net/viewer/?m=StsAiles_001 |
+| UM02 | University Manitoba Embankment | `UM02` | https://d2npz8tam2i8fl.cloudfront.net/viewer/?m=UM02 |
+| UM_01 | Badger | `UM_ResearchStation_01_WebHigh` | https://d2npz8tam2i8fl.cloudfront.net/viewer/?m=UM_01 |
+| UM_05 | University of Manitoba — Weather Station | `UM05_HighQuality_0SH_clean_2` | https://d2npz8tam2i8fl.cloudfront.net/viewer/?m=UM_05 |
+| UM_05_old | University of Manitoba — Weather Station (legacy splat) | `UM05_HighQuality_0SH` | https://d2npz8tam2i8fl.cloudfront.net/viewer/?m=UM_05_old |
 
 ---
 

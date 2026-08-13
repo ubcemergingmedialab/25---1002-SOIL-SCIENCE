@@ -277,6 +277,31 @@ export function setupPlayCanvasMarkers(options: {
   managerEntity.addComponent("script");
   const manager = managerEntity.script.create(ViewerAnnotationManager);
 
+  // AnnotationManager shares one PlaneGeometry mesh across every hotspot.
+  // MeshInstance.destroy() releases that mesh when the last instance is gone,
+  // which happens on marker rebuild/delete. WebGPU then builds a pipeline
+  // against empty vertex buffers and loses the device (black/frozen canvas).
+  const pinSharedHotspotMesh = () => {
+    const mesh = manager._mesh;
+    if (!mesh || mesh._soilHotspotPinned) return;
+    mesh.incRefCount();
+    mesh._soilHotspotPinned = true;
+  };
+
+  const ensureSharedHotspotMesh = () => {
+    if (manager._mesh?.vertexBuffer) {
+      pinSharedHotspotMesh();
+      return;
+    }
+    manager._mesh = pc.Mesh.fromGeometry(
+      app.graphicsDevice,
+      new pc.PlaneGeometry({ widthSegments: 1, lengthSegments: 1 }),
+    );
+    pinSharedHotspotMesh();
+  };
+
+  pinSharedHotspotMesh();
+
   const flyTo = (index) => {
     const marker = markers[index];
     if (!marker) return;
@@ -387,6 +412,73 @@ export function setupPlayCanvasMarkers(options: {
     manager.setSelectedAnnotation(annotation);
   };
 
+  const markerIdentityKey = (marker) =>
+    [
+      marker.title,
+      marker.description ?? "",
+      marker.icon ?? "",
+      marker.position.join(","),
+      marker.viewPosition.join(","),
+      String(normalizeRadius(marker)),
+    ].join("\0");
+
+  /** Detect a single insert or delete so we don't destroy every hotspot mesh. */
+  const findLengthSplice = (prev, next) => {
+    if (Math.abs(prev.length - next.length) !== 1) return null;
+    const prevKeys = prev.map(markerIdentityKey);
+    const nextKeys = next.map(markerIdentityKey);
+    const removing = prev.length > next.length;
+    const longer = removing ? prevKeys : nextKeys;
+    const shorter = removing ? nextKeys : prevKeys;
+    let spliceIndex = -1;
+    let shortIndex = 0;
+    for (let i = 0; i < longer.length; i++) {
+      if (shortIndex < shorter.length && longer[i] === shorter[shortIndex]) {
+        shortIndex += 1;
+        continue;
+      }
+      if (spliceIndex !== -1) return null;
+      spliceIndex = i;
+    }
+    if (spliceIndex === -1) spliceIndex = longer.length - 1;
+    if (shortIndex !== shorter.length) return null;
+    return { op: removing ? "remove" : "add", index: spliceIndex };
+  };
+
+  const createMarkerEntity = (marker, index) => {
+    ensureSharedHotspotMesh();
+
+    const entity = new pc.Entity("marker");
+    const [x, y, z] = displayPosition(marker.position);
+    entity.setPosition(x, y, z);
+    app.root.addChild(entity);
+    entity.addComponent("script");
+    manager.stageMarkerIcon(entity, marker.icon);
+
+    const annotation = entity.script.create(Annotation);
+
+    const labelChar = marker.title.trim().charAt(0) || `${index + 1}`;
+    annotation.label = marker.icon ? " " : labelChar.toUpperCase();
+    annotation.title = marker.title || `Marker ${index + 1}`;
+    annotation.text = marker.description;
+    manager.setMarkerRadius(annotation, normalizeRadius(marker));
+
+    annotation.on("show", () => {
+      if (programmaticTooltipShow) return;
+      const liveIndex = annotationScripts.indexOf(annotation);
+      if (liveIndex < 0) return;
+      if (markerClickHandler) {
+        markerClickHandler(liveIndex);
+        return;
+      }
+      if (flyOnMarkerClick) {
+        flyTo(liveIndex);
+      }
+    });
+
+    return { entity, annotation };
+  };
+
   const clearMarkerEntities = () => {
     markerEntities.forEach((entity) => entity.destroy());
     markerEntities.length = 0;
@@ -394,38 +486,29 @@ export function setupPlayCanvasMarkers(options: {
     selectedAnnotation = null;
   };
 
+  const removeMarkerAt = (index) => {
+    manager.hideActiveTooltip();
+    const entity = markerEntities[index];
+    markerEntities.splice(index, 1);
+    annotationScripts.splice(index, 1);
+    entity?.destroy();
+  };
+
+  const insertMarkerAt = (index, marker) => {
+    const { entity, annotation } = createMarkerEntity(marker, index);
+    markerEntities.splice(index, 0, entity);
+    annotationScripts.splice(index, 0, annotation);
+  };
+
   const rebuildMarkers = () => {
     manager.hideActiveTooltip();
     clearMarkerEntities();
+    ensureSharedHotspotMesh();
 
     markers.forEach((marker, index) => {
-      const entity = new pc.Entity(`marker-${index}`);
-      const [x, y, z] = displayPosition(marker.position);
-      entity.setPosition(x, y, z);
-      app.root.addChild(entity);
+      const { entity, annotation } = createMarkerEntity(marker, index);
       markerEntities.push(entity);
-      entity.addComponent("script");
-      manager.stageMarkerIcon(entity, marker.icon);
-
-      const annotation = entity.script.create(Annotation);
       annotationScripts.push(annotation);
-
-      const labelChar = marker.title.trim().charAt(0) || `${index + 1}`;
-      annotation.label = marker.icon ? " " : labelChar.toUpperCase();
-      annotation.title = marker.title || `Marker ${index + 1}`;
-      annotation.text = marker.description;
-      manager.setMarkerRadius(annotation, normalizeRadius(marker));
-
-      annotation.on("show", () => {
-        if (programmaticTooltipShow) return;
-        if (markerClickHandler) {
-          markerClickHandler(index);
-          return;
-        }
-        if (flyOnMarkerClick) {
-          flyTo(index);
-        }
-      });
     });
 
     applySelectedIndex(selectedIndex);
@@ -486,11 +569,22 @@ export function setupPlayCanvasMarkers(options: {
         return;
       }
 
+      const previousMarkers = markers;
       markers = [...nextMarkers];
 
       if (lengthChanged) {
         selectedIndex = nextSelected;
-        rebuildMarkers();
+        const splice = findLengthSplice(previousMarkers, nextMarkers);
+        if (splice?.op === "remove") {
+          removeMarkerAt(splice.index);
+          syncMarkerContent();
+        } else if (splice?.op === "add") {
+          insertMarkerAt(splice.index, nextMarkers[splice.index]);
+          syncMarkerContent();
+        } else {
+          rebuildMarkers();
+        }
+        applySelectedIndex(selectedIndex);
         return;
       }
 

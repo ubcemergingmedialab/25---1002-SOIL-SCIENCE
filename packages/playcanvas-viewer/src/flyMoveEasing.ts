@@ -73,7 +73,7 @@ function isMovementKeyHeld(controls: Controls, heldKeys: Set<string>): boolean {
  * while movement keys stay held. Gamepad / non-keyboard input keeps full speed.
  */
 export function setupFlyMoveEasing(
-  app: pc.Application,
+  app: pc.AppBase,
   controls: Controls,
   baseSpeeds: FlyMoveBaseSpeeds,
 ): FlyMoveEasingHandle {

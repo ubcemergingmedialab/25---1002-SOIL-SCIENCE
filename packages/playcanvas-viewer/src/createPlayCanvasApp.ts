@@ -298,19 +298,19 @@ export async function createPlayCanvasApp(
 
   const flyFovZoom = setupFlyFovZoom(canvas, camera);
 
+  const flyMoveSpeeds = {
+    moveSpeed: 4,
+    moveFastSpeed: 12,
+    moveSlowSpeed: 1,
+  };
+
   const flyMoveEasing =
-    controls &&
-    setupFlyMoveEasing(app, controls, {
-      moveSpeed: 4,
-      moveFastSpeed: 12,
-      moveSlowSpeed: controls.moveSlowSpeed,
-    });
+    controls && setupFlyMoveEasing(app, controls, flyMoveSpeeds);
 
   if (controls) {
     Object.assign(controls, {
       sceneSize: 200,
-      moveSpeed: 4,
-      moveFastSpeed: 12,
+      ...flyMoveSpeeds,
       enableOrbit: true,
       enablePan: true,
       focusPoint: DEFAULT_FOCUS_POINT.clone(),
