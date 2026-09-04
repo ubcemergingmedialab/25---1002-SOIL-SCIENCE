@@ -114,7 +114,7 @@ Keep **marker conversion logic** (`EditorMarker` ↔ backend tuple) in `Editor.t
 ### Phase 6.2 — Scene load parity (~1 day)
 
 - [x] `PlayCanvasEditor` loads `FilePlayCanvas` via `createPlayCanvasApp`
-- [x] `orientationX: 180` default (override with `?orientation=`)
+- [x] `orientationX: 180` default (override with `?orientationX=` / `orientationY` / `orientationZ`)
 - [x] Fly/orbit camera controls (`controlMode` query param, default fly)
 - [x] Loading overlay while LOD becomes interactive
 - [x] Read-only marker fly-to (preview until Phase 6.3 editing)

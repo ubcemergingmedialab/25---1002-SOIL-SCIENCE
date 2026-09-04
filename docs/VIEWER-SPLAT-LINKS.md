@@ -46,7 +46,9 @@ All parameters below are read from the viewer URL query string (`?key=value`, ch
 | `title` | Any string | Scene title shown in the UI. Only meaningful with `url` (fields supply their own title). |
 | `location` | Any string | Scene location/subtitle shown in the UI. Only meaningful with `url`. |
 | `startPos` | JSON array `[x,y,z]` (URL-encoded) | Overrides the initial camera/start position. Falls back to the field's `start_pos`, then the built-in default. |
-| `orientation` | Number (degrees) — default `180` | Rotation applied about the X axis to align the splat. Non-numeric values fall back to `180`. |
+| `orientationX` | Number (degrees) — default `180` | Rotation about the **X** axis to align the splat. Legacy alias: `orientation`. Non-numeric values fall back to `180`. |
+| `orientationY` | Number (degrees) — default `0` | Rotation about the **Y** axis. Non-numeric values fall back to `0`. |
+| `orientationZ` | Number (degrees) — default `0` | Rotation about the **Z** axis. Non-numeric values fall back to `0`. |
 | `groundClamp` / `heightClamp` | `0`, `false`, `off`, `no`, `disable`, `disabled` disable it | Ground height clamp is **on** by default; set either param to a falsey token to disable it on noisy heightmaps. |
 | `flyZoom` | `0`, `false`, `off`, `no`, `disable`, `disabled` disable it | Scroll-wheel FOV zoom in **Fly** mode (changes lens FOV without moving the camera). **On** by default on desktop; Orbit-mode wheel dolly is unaffected. |
 | `skybox` | `default` / `horizon` / `legacy` (default), `blue` / `solid` / `solidblue`, `infinite` / `cubemap` / `wrap` / `old` | Sky background mode. `default` = horizon fade, `blue` = solid blue surround, `infinite` = legacy wraparound cubemap. |
@@ -79,7 +81,9 @@ These parameters apply to the **admin editor** (marker manager / start-position 
 | `url` / `gaussianPath` / `path` | Splat URL or path | Opens an ad-hoc splat directly (checked in that order). Used when there's no saved field. |
 | `controlMode` | `fly`, `orbit` | Initial camera control scheme. Default is `fly` in the PlayCanvas editor and `orbit` in the legacy editor; other values fall back to that default. |
 | `flyZoom` | `0`, `false`, `off`, `no`, `disable`, `disabled` disable it | Scroll-wheel FOV zoom in **Fly** mode (changes lens FOV without moving the camera). **On** by default on desktop. |
-| `orientation` | Number (degrees) — default `180` | Rotation about the X axis to align the splat. Non-numeric values fall back to `180`. |
+| `orientationX` | Number (degrees) — default `180` | Rotation about the **X** axis to align the splat. Legacy alias: `orientation`. Non-numeric values fall back to `180`. |
+| `orientationY` | Number (degrees) — default `0` | Rotation about the **Y** axis. Non-numeric values fall back to `0`. |
+| `orientationZ` | Number (degrees) — default `0` | Rotation about the **Z** axis. Non-numeric values fall back to `0`. |
 | `title` | Any string | Scene title shown in the editor. Only meaningful with an ad-hoc `url`. |
 | `location` | Any string | Scene location shown in the editor. Only meaningful with an ad-hoc `url`. |
 | `markers` | JSON array (URL-encoded) | Pre-populates the editor with a set of markers (legacy editor, ad-hoc mode). |

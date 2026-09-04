@@ -167,7 +167,7 @@ powershell -ExecutionPolicy Bypass -File scripts/splat/batch-lod-from-temp.ps1
 splat-transform ./work/scene.ksplat -r 180,0,0 ./work/out/scene.sog
 ```
 
-**Already-uploaded LOD (no re-export):** use the smoke harness query flag `?orientation=180` until you re-run the batch script and re-upload.
+**Already-uploaded LOD (no re-export):** use the smoke harness query flag `?orientationX=180` until you re-run the batch script and re-upload.
 
 Adjust axis/angle if a specific scene still differs after comparing side-by-side with `/viewer/?m={FieldID}`.
 
@@ -250,7 +250,7 @@ The legacy viewer loads **`.splat` / `.ksplat`** via **mkkellogg** (`@mkkellogg/
 
 SOG is **lossy by design** ([PlayCanvas SOG spec](https://developer.playcanvas.com/user-manual/gaussian-splatting/formats/sog/)). Positions and scales are quantized; splats can render **smaller or misaligned**, which shows up as **gaps** (black clear color), especially on **dark, thin, or view-dependent** surfaces (e.g. vertical soil faces when the camera is level with the floor).
 
-This is **not** fixed by viewer URL params alone (`budget=0`, `lod=0`, `orientation=…`). It is also **not** “black splats rendered transparent” — holes are usually **missing overlap** or **low effective opacity** at that pixel, which reads as see-through on a black background.
+This is **not** fixed by viewer URL params alone (`budget=0`, `lod=0`, `orientationX=…`). It is also **not** “black splats rendered transparent” — holes are usually **missing overlap** or **low effective opacity** at that pixel, which reads as see-through on a black background.
 
 ### What we ruled out (UM_05 case study, 2026)
 

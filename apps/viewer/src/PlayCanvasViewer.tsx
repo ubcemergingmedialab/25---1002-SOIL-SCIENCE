@@ -7,7 +7,7 @@ import {
   getDefaultPerformancePreset,
   normalizeSplatUrl,
   parseFullSplatMode,
-  parseOrientationX,
+  parseOrientation,
   parseGroundClampEnabled,
   parseGroundOccluder,
   parseFlyZoomEnabled,
@@ -45,6 +45,8 @@ type LoadState =
       fullSplatSource?: string;
       sceneInfo: SceneInfo;
       orientationX: number;
+      orientationY: number;
+      orientationZ: number;
       startPos: [number, number, number];
       startViewPosition: [number, number, number];
       markers: NavigableMarker[];
@@ -131,7 +133,7 @@ export default function PlayCanvasViewer() {
   const fieldId = searchParams.get("m")?.trim() ?? "";
   const directUrl = searchParams.get("url")?.trim() ?? "";
   const fullSplatMode = parseFullSplatMode(searchParams);
-  const orientationX = parseOrientationX(searchParams.get("orientation"));
+  const orientation = parseOrientation(searchParams);
   const skyboxMode = parseSkyboxMode(searchParams);
   const splatBudgetOverrideM = parseSplatBudgetOverrideM(searchParams);
   const lockLodLevel = parseSplatLodLock(searchParams);
@@ -170,7 +172,9 @@ export default function PlayCanvasViewer() {
               title: searchParams.get("title") ?? "Local splat",
               location: searchParams.get("location") ?? undefined,
             },
-            orientationX,
+            orientationX: orientation.x,
+            orientationY: orientation.y,
+            orientationZ: orientation.z,
             startPos,
             startViewPosition: deriveStartViewPosition(startPos),
             markers: [],
@@ -243,7 +247,9 @@ export default function PlayCanvasViewer() {
           fullSplatMode,
           fullSplatSource,
           sceneInfo: getFieldSceneInfo(field),
-          orientationX,
+          orientationX: orientation.x,
+          orientationY: orientation.y,
+          orientationZ: orientation.z,
           startPos,
           startViewPosition,
           markers: getNavigableMarkersFromField(field),
@@ -265,7 +271,7 @@ export default function PlayCanvasViewer() {
     return () => {
       cancelled = true;
     };
-  }, [directUrl, fieldId, fullSplatMode, orientationX, searchParams.get("title"), searchParams.get("location")]);
+  }, [directUrl, fieldId, fullSplatMode, orientation.x, orientation.y, orientation.z, searchParams.get("title"), searchParams.get("location")]);
 
   controlModeRef.current = controlMode;
   performancePresetRef.current = performancePreset;
@@ -290,6 +296,8 @@ export default function PlayCanvasViewer() {
           canvas,
           splatUrl: loadState.splatUrl,
           orientationX: loadState.orientationX,
+          orientationY: loadState.orientationY,
+          orientationZ: loadState.orientationZ,
           startPos: loadState.startPos,
           startViewPosition: loadState.startViewPosition,
           markers: loadState.markers,

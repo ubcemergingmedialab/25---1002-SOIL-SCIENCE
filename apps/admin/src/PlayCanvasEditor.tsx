@@ -6,7 +6,7 @@ import {
   getDefaultPerformancePreset,
   normalizeSplatUrl,
   parseFlyZoomEnabled,
-  parseOrientationX,
+  parseOrientation,
   type PlayCanvasApp,
 } from "@soil/playcanvas-viewer";
 import {
@@ -60,6 +60,8 @@ type LoadState =
       splatUrl: string;
       sceneInfo: SceneInfo;
       orientationX: number;
+      orientationY: number;
+      orientationZ: number;
       field: Field | null;
       startPos: [number, number, number];
       startViewPosition: [number, number, number];
@@ -187,7 +189,7 @@ export default function PlayCanvasEditor() {
     searchParams.get("gaussianPath")?.trim() ||
     searchParams.get("path")?.trim() ||
     "";
-  const orientationX = parseOrientationX(searchParams.get("orientation"));
+  const orientation = parseOrientation(searchParams);
   const flyZoom = parseFlyZoomEnabled(searchParams);
 
   controlModeRef.current = controlMode;
@@ -644,7 +646,9 @@ export default function PlayCanvasEditor() {
             title: searchParams.get("title") ?? "Local splat",
             location: searchParams.get("location") ?? undefined,
           },
-          orientationX,
+          orientationX: orientation.x,
+          orientationY: orientation.y,
+          orientationZ: orientation.z,
           field: null,
           startPos: DEFAULT_START_POS,
           startViewPosition: defaultViewPosition,
@@ -719,7 +723,9 @@ export default function PlayCanvasEditor() {
           status: "ready",
           splatUrl: normalizeSplatUrl(splatUrl),
           sceneInfo: getFieldSceneInfo(normalized),
-          orientationX,
+          orientationX: orientation.x,
+          orientationY: orientation.y,
+          orientationZ: orientation.z,
           field: normalized,
           startPos: initialStartPos,
           startViewPosition: initialStartViewPosition,
@@ -738,7 +744,7 @@ export default function PlayCanvasEditor() {
     return () => {
       cancelled = true;
     };
-  }, [directUrl, fieldId, orientationX, searchParams.get("title"), searchParams.get("location")]);
+  }, [directUrl, fieldId, orientation.x, orientation.y, orientation.z, searchParams.get("title"), searchParams.get("location")]);
 
   useEffect(() => {
     if (loadState.status !== "ready") return;
@@ -760,6 +766,8 @@ export default function PlayCanvasEditor() {
           canvas,
           splatUrl: loadState.splatUrl,
           orientationX: loadState.orientationX,
+          orientationY: loadState.orientationY,
+          orientationZ: loadState.orientationZ,
           markers: [],
           markerOverlayParent: overlayParent,
           defaultControlMode: controlModeRef.current,

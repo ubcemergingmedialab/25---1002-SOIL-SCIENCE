@@ -76,7 +76,7 @@ During PlayCanvas migration:
 4. **Dev harness** (field picker, local bundles): **http://localhost:5173/viewer-pc-dev/**
 5. **Local LOD bundle** (dev server only): `http://localhost:5173/viewer/?url=/work-out/{basename}/lod-meta.json`
 6. **Legacy fallback:** `http://localhost:5173/viewer/?m={FieldID}&renderer=legacy`
-7. **Orientation:** viewer applies **180° X by default** (matches legacy mkkellogg flip). Override with `?orientation=0` for raw LOD testing.
+7. **Orientation:** viewer applies **180° X by default** (matches legacy mkkellogg flip). Override with `?orientationX=0` (and optionally `orientationY` / `orientationZ`) for raw LOD testing.
 8. **Markers:** loaded from the same `/fields/{id}` API as legacy viewer; sidebar list + 3D hotspots (click hotspot for title/description tooltip).
 
 ### PlayCanvas editor

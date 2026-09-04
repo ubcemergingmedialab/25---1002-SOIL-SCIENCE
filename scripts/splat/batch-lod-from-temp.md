@@ -315,7 +315,7 @@ Decimation and LOD bundling are relatively fast. **Steps 4a–4b (collision prep
 | `No .ksplat/.splat/.ply files in temp/` | Empty or wrong folder | Add sources to `temp/` |
 | `splat-transform failed` with short command line | Old script bug (fixed) | Pull latest script; ensure array args use `(...)` |
 | `Cannot find an overload for "Max"` | PowerShell `[math]::Max` arity | Pull latest script |
-| PlayCanvas scene upside-down | LOD exported without rotation | Re-run with default `SPLAT_ROTATION=180,0,0` or use `?orientation=180` on old CDN assets |
+| PlayCanvas scene upside-down | LOD exported without rotation | Re-run with default `SPLAT_ROTATION=180,0,0` or use `?orientationX=180` on old CDN assets |
 | `[2/4] decimate` fails: `WebGPU device lost` / `DXGI_ERROR_DEVICE_HUNG` | GPU KNN pass overran the Windows driver watchdog (TDR) on a large splat | Script auto-retries on CPU; to skip the GPU attempt set `SPLAT_DECIMATE_DEVICE=cpu`. Also worth: update GPU drivers, close other GPU apps, or raise the `TdrDelay` registry value |
 | PlayCanvas freeze / smeared view | Bad scales or distant sky shell | Script auto-filters; check `work/batch-lod.log` for crop notes |
 | Step 4 appears hung / no output | Voxelization is CPU-heavy; old script buffered stderr | Kill stale `node`/`splat-transform` processes; pull latest script (prep cull + timeout); use `check-batch-progress.sh` |

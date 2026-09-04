@@ -14,7 +14,7 @@ const scratchDeltaQuat = new pc.Quat();
 /**
  * DynamoDB marker/start_pos coords assume the legacy viewer's effective 180° X
  * splat rotation. Re-map them when the runtime splat uses a different rotation
- * (e.g. `?orientation=0` on unbaked LOD).
+ * (e.g. `?orientationX=0` on unbaked LOD).
  */
 export function mapLegacyStoredPosition(
   stored: [number, number, number],

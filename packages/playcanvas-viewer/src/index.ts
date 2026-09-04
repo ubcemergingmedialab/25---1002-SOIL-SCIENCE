@@ -1,12 +1,20 @@
 export {
   createPlayCanvasApp,
   DEFAULT_ORIENTATION_X,
+  DEFAULT_ORIENTATION_Y,
+  DEFAULT_ORIENTATION_Z,
   type PlayCanvasApp,
   type PlayCanvasAppOptions,
   type PlayCanvasLoadProgress,
 } from "./createPlayCanvasApp";
 export { normalizeSplatUrl } from "./normalizeSplatUrl";
-export { parseOrientationX } from "./parseOrientation";
+export {
+  parseOrientation,
+  parseOrientationX,
+  parseOrientationY,
+  parseOrientationZ,
+} from "./parseOrientation";
+export type { SplatOrientationDegrees } from "./applySplatOrientation";
 export {
   applyAlphaClipForward,
   getAlphaClipForwardForPreset,

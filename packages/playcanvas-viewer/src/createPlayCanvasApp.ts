@@ -26,7 +26,7 @@ import {
 } from "./performancePresets";
 import { applyAlphaClipForward, getAlphaClipForwardForPreset } from "./alphaClip";
 import { DEFAULT_MARKER_RADIUS } from "@soil/shared/markers/editorMarkers";
-import { applySplatOrientationX } from "./applySplatOrientation";
+import { applySplatOrientation } from "./applySplatOrientation";
 import { deriveStartViewPosition } from "@soil/shared/utils/startPos";
 import { resetCameraFromStartPos } from "./spawnCamera";
 import { mapLegacyStoredPosition } from "./sceneCoordinates";
@@ -58,6 +58,8 @@ import type { HeightmapGroundClampConfig } from "./heightmap/types";
 
 /** Matches legacy mkkellogg viewer flip in GaussianViewer.ts (rotation [1,0,0,0]). */
 export const DEFAULT_ORIENTATION_X = 180;
+export const DEFAULT_ORIENTATION_Y = 0;
+export const DEFAULT_ORIENTATION_Z = 0;
 
 export type PlayCanvasLoadProgress = {
   hint: string;
@@ -67,8 +69,12 @@ export type PlayCanvasLoadProgress = {
 export type PlayCanvasAppOptions = {
   canvas: HTMLCanvasElement;
   splatUrl: string;
-  /** Euler X rotation (degrees). Default 180 to align with legacy `/viewer/`. */
+  /** Rotation about +X (degrees). Default 180 to align with legacy `/viewer/`. */
   orientationX?: number;
+  /** Rotation about +Y (degrees). Default 0. */
+  orientationY?: number;
+  /** Rotation about +Z (degrees). Default 0. */
+  orientationZ?: number;
   /** Global splat budget in millions. When set (including `0`), overrides `performancePreset`. */
   splatBudgetM?: number;
   /** Quality preset; overrides `splatBudgetM` when provided. */
@@ -168,6 +174,8 @@ export async function createPlayCanvasApp(
     canvas,
     splatUrl,
     orientationX = DEFAULT_ORIENTATION_X,
+    orientationY = DEFAULT_ORIENTATION_Y,
+    orientationZ = DEFAULT_ORIENTATION_Z,
     splatBudgetM,
     performancePreset = getDefaultPerformancePreset(),
     lockLodLevel,
@@ -333,7 +341,11 @@ export async function createPlayCanvasApp(
 
   const splatEntity = new pc.Entity("splat");
   splatEntity.addComponent("gsplat", { asset });
-  applySplatOrientationX(splatEntity, orientationX);
+  applySplatOrientation(splatEntity, {
+    x: orientationX,
+    y: orientationY,
+    z: orientationZ,
+  });
   app.root.addChild(splatEntity);
 
   const gsplat = splatEntity.gsplat;

@@ -4,7 +4,7 @@ import { getFieldById, getFields } from "./publicApi";
 import {
   createPlayCanvasApp,
   normalizeSplatUrl,
-  parseOrientationX,
+  parseOrientation,
 } from "@soil/playcanvas-viewer";
 
 export default function PlayCanvasSmoke() {
@@ -16,7 +16,7 @@ export default function PlayCanvasSmoke() {
 
   const fieldId = searchParams.get("m") ?? "";
   const directUrl = searchParams.get("url") ?? "";
-  const orientationX = parseOrientationX(searchParams.get("orientation"));
+  const orientation = parseOrientation(searchParams);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,7 +71,9 @@ export default function PlayCanvasSmoke() {
         app = await createPlayCanvasApp({
           canvas,
           splatUrl,
-          orientationX,
+          orientationX: orientation.x,
+          orientationY: orientation.y,
+          orientationZ: orientation.z,
         });
 
         if (cancelled) {
@@ -91,7 +93,7 @@ export default function PlayCanvasSmoke() {
       cancelled = true;
       app?.destroy();
     };
-  }, [fieldId, directUrl, orientationX]);
+  }, [fieldId, directUrl, orientation.x, orientation.y, orientation.z]);
 
   function onFieldChange(nextId: string) {
     const next = new URLSearchParams(searchParams);
@@ -148,7 +150,9 @@ export default function PlayCanvasSmoke() {
           {" · "}
           <code>?url=https://…/lod-meta.json</code>
           {" · "}
-          <code>?orientation=0</code> to disable default 180° flip
+          <code>?orientationX=0</code> to disable default 180° X flip
+          {" · "}
+          <code>?orientationY=</code> / <code>orientationZ=</code> for other axes
           {" · "}
           <a href="/viewer/" style={{ color: "#93c5fd" }}>
             production viewer
