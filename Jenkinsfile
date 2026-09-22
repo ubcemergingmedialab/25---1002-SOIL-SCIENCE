@@ -1,5 +1,5 @@
 pipeline {
-    agent 'linux'
+    agent { label 'linux' }
     tools {
         nodejs '24'
     }
